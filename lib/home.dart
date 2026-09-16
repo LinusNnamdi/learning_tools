@@ -2,42 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:learn/common/common.dart';
+import 'package:learn/courses/course.dart';
+import 'package:learn/games/games.dart';
+import 'package:learn/jobs/jobs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-bool get supportsEmbeddedWebView {
-  if (kIsWeb) return false;
-  return defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS;
-}
-
-Future<void> openCourseUrl(
-  BuildContext context, {
-  required String title,
-  required String url,
-}) async {
-  if (supportsEmbeddedWebView) {
-    if (!context.mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => WebViewScreen(title: title, url: url),
-      ),
-    );
-    return;
-  }
-
-  final uri = Uri.parse(url);
-  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-  if (!ok && context.mounted) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Could not open $url')));
-  }
-}
-
+//_copygroup
 class LearningTechApp extends StatelessWidget {
   const LearningTechApp({super.key});
 
@@ -632,17 +607,15 @@ class DiagramLine {
 
 class DiagramGroup {
   final String id;
-
   ShapeType type;
-
   Offset position;
-
   Size size;
-
   String name;
 
-  List<String> childShapeIds;
+  Color borderColor;
+  Color backgroundColor;
 
+  List<String> childShapeIds;
   List<String> childLineIds;
 
   Map<String, dynamic> toJson() => {
@@ -651,6 +624,8 @@ class DiagramGroup {
     'position': {'dx': position.dx, 'dy': position.dy},
     'size': {'width': size.width, 'height': size.height},
     'name': name,
+    'borderColor': borderColor.toARGB32(),
+    'backgroundColor': backgroundColor.toARGB32(),
     'childShapeIds': childShapeIds,
     'childLineIds': childLineIds,
   };
@@ -668,8 +643,19 @@ class DiagramGroup {
         (json['size']['height'] as num).toDouble(),
       ),
       name: json['name'] as String,
-      childShapeIds: List<String>.from(json['childShapeIds'] as List),
-      childLineIds: List<String>.from(json['childLineIds'] as List),
+
+      // Defaults keep previously saved projects compatible.
+      borderColor: Color((json['borderColor'] as num?)?.toInt() ?? 0xFF111827),
+      backgroundColor: Color(
+        (json['backgroundColor'] as num?)?.toInt() ?? 0x00000000,
+      ),
+
+      childShapeIds: List<String>.from(
+        json['childShapeIds'] as List? ?? const [],
+      ),
+      childLineIds: List<String>.from(
+        json['childLineIds'] as List? ?? const [],
+      ),
     );
   }
 
@@ -679,9 +665,12 @@ class DiagramGroup {
     required this.position,
     required this.size,
     required this.name,
-    required this.childShapeIds,
-    required this.childLineIds,
-  });
+    this.borderColor = const Color(0xFF111827),
+    this.backgroundColor = const Color(0x00000000),
+    List<String> childShapeIds = const [],
+    List<String> childLineIds = const [],
+  }) : childShapeIds = List<String>.from(childShapeIds),
+       childLineIds = List<String>.from(childLineIds);
 }
 
 class ThemeController extends ChangeNotifier {
@@ -749,10 +738,6 @@ class DiagramController extends ChangeNotifier {
 
   ShapeType get activeShapeType => _activeShapeType;
 
-  ShapeType _activeContainerType = ShapeType.rectangle;
-
-  ShapeType get activeContainerType => _activeContainerType;
-
   LineType _activeLineType = LineType.single;
 
   LineType get activeLineType => _activeLineType;
@@ -789,6 +774,7 @@ class DiagramController extends ChangeNotifier {
       _multiSelectedLineIds.isNotEmpty ||
       _multiSelectedGroupIds.isNotEmpty;
   bool get hasMultipleSelection => totalSelectedComponents > 1;
+
   int get totalSelectedComponents =>
       _multiSelectedShapeIds.length +
       _multiSelectedLineIds.length +
@@ -817,16 +803,24 @@ class DiagramController extends ChangeNotifier {
   String currentFolder = 'General'; // default only; user can change to anything
 
   final List<_DiagramSnapshot> _undoStack = [];
+  final List<_DiagramSnapshot> _redoStack = [];
+
+  bool get canUndo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  bool get canDuplicateSelection {
+    final onlyOneSelected = totalSelectedComponents == 1;
+
+    if (!onlyOneSelected) {
+      return false;
+    }
+
+    return _selectedShapeId != null || _selectedGroupId != null;
+  }
 
   void setShapeType(ShapeType type) {
     _activeShapeType = type;
     _activeTool = CanvasTool.component;
-    notifyListeners();
-  }
-
-  void setContainerType(ShapeType type) {
-    _activeContainerType = type;
-    _activeTool = CanvasTool.container;
     notifyListeners();
   }
 
@@ -952,14 +946,85 @@ class DiagramController extends ChangeNotifier {
     }
   }
 
-  void addContainer(Offset position, {ShapeType? type}) {
+  void duplicateSelected() {
+    if (!canDuplicateSelection) return;
+
+    if (_selectedShapeId != null) {
+      _duplicateShape(_selectedShapeId!);
+      return;
+    }
+
+    if (_selectedGroupId != null) {
+      _duplicateGroup(_selectedGroupId!);
+    }
+  }
+
+  void _duplicateShape(String id) {
+    final original = findShape(id);
+
+    if (original == null) return;
+
     _saveHistory();
 
-    final containerType = type ?? _activeContainerType;
+    final duplicate = DiagramShape(
+      id: 'shape-${DateTime.now().microsecondsSinceEpoch}',
+      type: ShapeType.rectangle,
+      position: original.position + const Offset(30, 30),
+      width: original.width,
+      height: original.height,
+      text: '${original.text} Copy',
+      borderColor: original.borderColor,
+      backgroundColor: original.backgroundColor,
+      borderWidth: original.borderWidth,
+
+      // Do not automatically attach the duplicate to the
+      // original container.
+      parentContainerId: null,
+
+      zIndex: _shapes.length,
+    );
+
+    _shapes.add(duplicate);
+
+    _selectShapeInternal(duplicate.id);
+
+    notifyListeners();
+  }
+
+  void _duplicateGroup(String id) {
+    final original = findGroup(id);
+
+    if (original == null) return;
+
+    _saveHistory();
+
+    final duplicate = DiagramGroup(
+      id: 'group-${DateTime.now().microsecondsSinceEpoch}',
+      type: original.type,
+      position: original.position + const Offset(30, 30),
+      size: original.size,
+      name: '${original.name} Copy',
+
+      // Important:
+      // duplicating the container should not steal or share
+      // the original container's child IDs.
+      childShapeIds: const [],
+      childLineIds: const [],
+    );
+
+    _groups.add(duplicate);
+
+    _selectGroupInternal(duplicate.id);
+
+    notifyListeners();
+  }
+
+  void addContainer(Offset position) {
+    _saveHistory();
 
     final group = DiagramGroup(
       id: 'group-${DateTime.now().microsecondsSinceEpoch}',
-      type: containerType,
+      type: ShapeType.rectangle,
       position: position,
       size: const Size(420, 260),
       name: 'Container',
@@ -989,7 +1054,17 @@ class DiagramController extends ChangeNotifier {
 
     if (group == null) return;
 
+    final delta = newPosition - group.position;
+
     group.position = newPosition;
+
+    for (final shapeId in group.childShapeIds) {
+      final shape = findShape(shapeId);
+
+      if (shape != null) {
+        shape.position += delta;
+      }
+    }
 
     notifyListeners();
   }
@@ -1018,8 +1093,54 @@ class DiagramController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void finishShapeMove() {
+  void finishShapeMove(String shapeId) {
+    _updateShapeContainerMembership(shapeId);
     _saveHistory();
+
+    notifyListeners();
+  }
+
+  void _updateShapeContainerMembership(String shapeId) {
+    final shape = findShape(shapeId);
+
+    if (shape == null) return;
+
+    final shapeCenter = Offset(
+      shape.position.dx + shape.width / 2,
+      shape.position.dy + shape.height / 2,
+    );
+
+    DiagramGroup? containingGroup;
+
+    // Search newest containers first.
+    //
+    // If containers overlap, the most recently created container
+    // containing the shape's center becomes its parent.
+    for (final group in _groups.reversed) {
+      final bounds = Rect.fromLTWH(
+        group.position.dx,
+        group.position.dy,
+        group.size.width,
+        group.size.height,
+      );
+
+      if (bounds.contains(shapeCenter)) {
+        containingGroup = group;
+        break;
+      }
+    }
+
+    // Remove this shape from any previous container.
+    for (final group in _groups) {
+      group.childShapeIds.remove(shapeId);
+    }
+
+    shape.parentContainerId = containingGroup?.id;
+
+    if (containingGroup != null &&
+        !containingGroup.childShapeIds.contains(shapeId)) {
+      containingGroup.childShapeIds.add(shapeId);
+    }
   }
 
   void finishGroupMove() {
@@ -1032,14 +1153,24 @@ class DiagramController extends ChangeNotifier {
     double bestDist = threshold;
 
     for (final line in _lines) {
-      final source = findShape(line.sourceShapeId);
-      final target = findShape(line.targetShapeId);
-      if (source == null || target == null) continue;
+      final sourceCenter = centerOfNode(line.sourceShapeId);
 
-      final start = connectionPoint(source, centerOf(target));
-      final end = connectionPoint(target, centerOf(source));
+      final targetCenter = centerOfNode(line.targetShapeId);
+
+      if (sourceCenter == null || targetCenter == null) {
+        continue;
+      }
+
+      final start = connectionPointForNode(line.sourceShapeId, targetCenter);
+
+      final end = connectionPointForNode(line.targetShapeId, sourceCenter);
+
+      if (start == null || end == null) {
+        continue;
+      }
 
       final dist = _distanceToSegment(point, start, end);
+
       if (dist < bestDist) {
         bestDist = dist;
         bestId = line.id;
@@ -1197,7 +1328,7 @@ class DiagramController extends ChangeNotifier {
         _connectionSourceId = shapeId;
         _selectShapeInternal(shapeId);
       } else if (_connectionSourceId != shapeId) {
-        connectShapes(_connectionSourceId!, shapeId);
+        connectNodes(_connectionSourceId!, shapeId);
 
         _connectionSourceId = null;
       }
@@ -1210,16 +1341,33 @@ class DiagramController extends ChangeNotifier {
   }
 
   void handleGroupTap(String groupId, {bool multiSelect = false}) {
+    if (_activeTool == CanvasTool.connect) {
+      if (_connectionSourceId == null) {
+        _connectionSourceId = groupId;
+        _selectGroupInternal(groupId);
+      } else if (_connectionSourceId != groupId) {
+        connectNodes(_connectionSourceId!, groupId);
+
+        _connectionSourceId = null;
+      }
+
+      notifyListeners();
+      return;
+    }
+
     selectGroup(groupId, addToSelection: multiSelect);
   }
 
-  void connectShapes(String sourceId, String targetId) {
-    final source = findShape(sourceId);
-    final target = findShape(targetId);
-
-    if (source == null || target == null) return;
-
+  void connectNodes(String sourceId, String targetId) {
     if (sourceId == targetId) return;
+
+    final sourceCenter = centerOfNode(sourceId);
+    final targetCenter = centerOfNode(targetId);
+
+    // Both IDs must represent either a shape or a container.
+    if (sourceCenter == null || targetCenter == null) {
+      return;
+    }
 
     final exists = _lines.any(
       (line) =>
@@ -1246,6 +1394,11 @@ class DiagramController extends ChangeNotifier {
     notifyListeners();
   }
 
+  ///original.type Kept for compatibility with existing tests and code.
+  void connectShapes(String sourceId, String targetId) {
+    connectNodes(sourceId, targetId);
+  }
+
   void updateShapeText(String id, String text) {
     final shape = findShape(id);
 
@@ -1266,6 +1419,30 @@ class DiagramController extends ChangeNotifier {
     _saveHistory();
 
     group.name = name.trim().isEmpty ? 'Container' : name.trim();
+
+    notifyListeners();
+  }
+
+  void updateGroupBorderColor(String id, Color color) {
+    final group = findGroup(id);
+
+    if (group == null) return;
+
+    _saveHistory();
+
+    group.borderColor = color;
+
+    notifyListeners();
+  }
+
+  void updateGroupBackgroundColor(String id, Color color) {
+    final group = findGroup(id);
+
+    if (group == null) return;
+
+    _saveHistory();
+
+    group.backgroundColor = color;
 
     notifyListeners();
   }
@@ -1330,10 +1507,6 @@ class DiagramController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void editSelected() {
-    notifyListeners();
-  }
-
   void deleteSelected() {
     _saveHistory();
 
@@ -1378,6 +1551,22 @@ class DiagramController extends ChangeNotifier {
     }
 
     if (groupIds.isNotEmpty) {
+      // Remove any connection attached to a deleted container.
+      _lines.removeWhere(
+        (line) =>
+            groupIds.contains(line.sourceShapeId) ||
+            groupIds.contains(line.targetShapeId),
+      );
+
+      // Shapes survive when their container is deleted,
+      // but they are no longer members of that container.
+      for (final shape in _shapes) {
+        if (shape.parentContainerId != null &&
+            groupIds.contains(shape.parentContainerId)) {
+          shape.parentContainerId = null;
+        }
+      }
+
       _groups.removeWhere((group) => groupIds.contains(group.id));
     }
 
@@ -1444,31 +1633,63 @@ class DiagramController extends ChangeNotifier {
   void undo() {
     if (_undoStack.isEmpty) return;
 
+    _redoStack.add(_createSnapshot());
+
     final snapshot = _undoStack.removeLast();
 
+    _restoreSnapshot(snapshot);
+  }
+
+  void redo() {
+    if (_redoStack.isEmpty) return;
+
+    _undoStack.add(_createSnapshot());
+
+    final snapshot = _redoStack.removeLast();
+
+    _restoreSnapshot(snapshot);
+  }
+
+  void _restoreSnapshot(_DiagramSnapshot snapshot) {
     _shapes
       ..clear()
-      ..addAll(snapshot.shapes);
+      ..addAll(snapshot.shapes.map(_copyShape));
 
     _lines
       ..clear()
-      ..addAll(snapshot.lines);
+      ..addAll(snapshot.lines.map(_copyLine));
 
     _groups
       ..clear()
-      ..addAll(snapshot.groups);
+      ..addAll(snapshot.groups.map(_copyGroup));
 
-    clearSelection();
+    _selectedShapeId = null;
+    _selectedLineId = null;
+    _selectedGroupId = null;
+
+    _multiSelectedShapeIds.clear();
+    _multiSelectedLineIds.clear();
+    _multiSelectedGroupIds.clear();
+
+    _connectionSourceId = null;
+
+    notifyListeners();
+  }
+
+  _DiagramSnapshot _createSnapshot() {
+    return _DiagramSnapshot(
+      shapes: _shapes.map(_copyShape).toList(),
+      lines: _lines.map(_copyLine).toList(),
+      groups: _groups.map(_copyGroup).toList(),
+    );
   }
 
   void _saveHistory() {
-    _undoStack.add(
-      _DiagramSnapshot(
-        shapes: _shapes.map(_copyShape).toList(),
-        lines: _lines.map(_copyLine).toList(),
-        groups: _groups.map(_copyGroup).toList(),
-      ),
-    );
+    _undoStack.add(_createSnapshot());
+
+    // Once a new edit is made after an undo,
+    // the old redo history is no longer valid.
+    _redoStack.clear();
 
     if (_undoStack.length > 50) {
       _undoStack.removeAt(0);
@@ -1546,8 +1767,10 @@ class DiagramController extends ChangeNotifier {
       position: group.position,
       size: group.size,
       name: group.name,
-      childShapeIds: List<String>.from(group.childShapeIds),
-      childLineIds: List<String>.from(group.childLineIds),
+      borderColor: group.borderColor,
+      backgroundColor: group.backgroundColor,
+      childShapeIds: group.childShapeIds,
+      childLineIds: group.childLineIds,
     );
   }
 
@@ -1579,6 +1802,62 @@ class DiagramController extends ChangeNotifier {
 
     return center +
         Offset(math.cos(angle) * distance, math.sin(angle) * distance);
+  }
+
+  Offset? centerOfNode(String id) {
+    final shape = findShape(id);
+
+    if (shape != null) {
+      return centerOf(shape);
+    }
+
+    final group = findGroup(id);
+
+    if (group != null) {
+      return group.position +
+          Offset(group.size.width / 2, group.size.height / 2);
+    }
+
+    return null;
+  }
+
+  Offset? connectionPointForNode(String id, Offset target) {
+    final shape = findShape(id);
+
+    if (shape != null) {
+      return connectionPoint(shape, target);
+    }
+
+    final group = findGroup(id);
+
+    if (group == null) {
+      return null;
+    }
+
+    return _groupConnectionPoint(group, target);
+  }
+
+  Offset _groupConnectionPoint(DiagramGroup group, Offset target) {
+    final center =
+        group.position + Offset(group.size.width / 2, group.size.height / 2);
+
+    final dx = target.dx - center.dx;
+    final dy = target.dy - center.dy;
+
+    if (dx == 0 && dy == 0) {
+      return center;
+    }
+
+    final halfWidth = group.size.width / 2;
+    final halfHeight = group.size.height / 2;
+
+    final horizontalScale = dx == 0 ? double.infinity : halfWidth / dx.abs();
+
+    final verticalScale = dy == 0 ? double.infinity : halfHeight / dy.abs();
+
+    final scale = math.min(horizontalScale, verticalScale);
+
+    return center + Offset(dx * scale, dy * scale);
   }
 
   void loadDemo() {
@@ -1675,6 +1954,34 @@ class DiagramController extends ChangeNotifier {
 
     clearSelection();
   }
+
+  void startNewProject() {
+    _shapes.clear();
+    _lines.clear();
+    _groups.clear();
+
+    _selectedShapeId = null;
+    _selectedLineId = null;
+    _selectedGroupId = null;
+
+    _multiSelectedShapeIds.clear();
+    _multiSelectedLineIds.clear();
+    _multiSelectedGroupIds.clear();
+
+    _connectionSourceId = null;
+
+    currentProjectId = null;
+    currentProjectName = null;
+    currentFolder = 'General';
+
+    _animationProgress = 0;
+    _isPlaying = false;
+
+    _undoStack.clear();
+    _redoStack.clear();
+
+    notifyListeners();
+  }
 }
 
 class _DiagramSnapshot {
@@ -1687,236 +1994,6 @@ class _DiagramSnapshot {
     required this.lines,
     required this.groups,
   });
-}
-
-class AppTheme {
-  AppTheme._();
-
-  static const Color gold = Color(0xFFF0C75C);
-  static const Color dark = Color(0xFF111827);
-
-  static ThemeData get light {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: gold,
-        brightness: Brightness.light,
-        surface: Colors.white,
-      ),
-
-      scaffoldBackgroundColor: Colors.white,
-
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: dark,
-        elevation: 0,
-        centerTitle: false,
-        surfaceTintColor: Colors.transparent,
-      ),
-
-      cardTheme: CardThemeData(
-        color: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
-        indicatorColor: gold.withValues(alpha: 0.25),
-        elevation: 0,
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return const TextStyle(fontWeight: FontWeight.w800, color: dark);
-          }
-
-          return const TextStyle(fontWeight: FontWeight.w600);
-        }),
-      ),
-
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: gold, width: 2),
-        ),
-      ),
-
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: gold,
-          foregroundColor: dark,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: gold,
-          foregroundColor: dark,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-
-      chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-
-      dividerTheme: const DividerThemeData(thickness: 1, space: 1),
-    );
-  }
-
-  static ThemeData get darkTheme {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: gold,
-        brightness: Brightness.dark,
-        surface: dark,
-      ),
-
-      scaffoldBackgroundColor: dark,
-
-      appBarTheme: const AppBarTheme(
-        backgroundColor: dark,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: false,
-        surfaceTintColor: Colors.transparent,
-      ),
-
-      cardTheme: CardThemeData(
-        color: const Color(0xFF1F2937),
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: const Color(0xFF0F172A),
-        indicatorColor: gold.withValues(alpha: 0.25),
-        elevation: 0,
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return const TextStyle(
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            );
-          }
-
-          return const TextStyle(fontWeight: FontWeight.w600);
-        }),
-      ),
-
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFF1F2937),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: gold, width: 2),
-        ),
-      ),
-
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: gold,
-          foregroundColor: dark,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: gold,
-          foregroundColor: dark,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-
-      chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-
-      dividerTheme: DividerThemeData(
-        color: Colors.white.withValues(alpha: 0.10),
-        thickness: 1,
-        space: 1,
-      ),
-    );
-  }
-}
-
-class Math {
-  static double cos(double value) {
-    return _cos(value);
-  }
-
-  static double sin(double value) {
-    return _sin(value);
-  }
-}
-
-double _cos(double value) {
-  double result = 1;
-  double term = 1;
-
-  for (int i = 1; i <= 10; i++) {
-    term *= -value * value / ((2 * i - 1) * (2 * i));
-
-    result += term;
-  }
-
-  return result;
-}
-
-double _sin(double value) {
-  double result = value;
-  double term = value;
-
-  for (int i = 1; i <= 10; i++) {
-    term *= -value * value / ((2 * i) * (2 * i + 1));
-
-    result += term;
-  }
-
-  return result;
 }
 
 class DiagramCanvas extends StatefulWidget {
@@ -1949,8 +2026,6 @@ class _DiagramCanvasState extends State<DiagramCanvas>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = context.read<DiagramController>();
-
-      controller.loadDemo();
 
       if (controller.isPlaying) {
         _animationController.repeat();
@@ -1995,6 +2070,27 @@ class _DiagramCanvasState extends State<DiagramCanvas>
             scaleEnabled: true,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
+
+              onLongPressStart: (details) {
+                // Shapes and containers have their own long-press handlers.
+                // This parent handler is therefore useful for painted connections.
+                final lineId = controller.hitTestLine(
+                  details.localPosition,
+                  threshold: 20,
+                );
+
+                if (lineId == null) {
+                  return;
+                }
+
+                _showComponentContextMenu(
+                  context: context,
+                  controller: controller,
+                  kind: _CanvasComponentKind.line,
+                  id: lineId,
+                );
+              },
+
               onTapUp: (details) {
                 if (controller.activeTool == CanvasTool.component) {
                   controller.addShape(details.localPosition);
@@ -2029,7 +2125,7 @@ class _DiagramCanvasState extends State<DiagramCanvas>
                         group: group,
                         selected: controller.isGroupSelected(group.id),
                         onTap: () {
-                          controller.selectGroup(group.id);
+                          controller.handleGroupTap(group.id);
                         },
                         onMove: (pos) {
                           controller.moveGroup(group.id, pos);
@@ -2038,14 +2134,24 @@ class _DiagramCanvasState extends State<DiagramCanvas>
                         onResize: (size) {
                           controller.resizeGroup(group.id, size);
                         },
+                        onLongPress: () {
+                          _showComponentContextMenu(
+                            context: context,
+                            controller: controller,
+                            kind: _CanvasComponentKind.group,
+                            id: group.id,
+                          );
+                        },
                       );
                     }),
 
                     Positioned.fill(
-                      child: CustomPaint(
-                        painter: _LinePainter(
-                          controller: controller,
-                          animationValue: controller.animationProgress,
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _LinePainter(
+                            controller: controller,
+                            animationValue: controller.animationProgress,
+                          ),
                         ),
                       ),
                     ),
@@ -2058,9 +2164,11 @@ class _DiagramCanvasState extends State<DiagramCanvas>
                           controller.handleShapeTap(shape.id);
                         },
                         onLongPress: () {
-                          controller.handleShapeTap(
-                            shape.id,
-                            multiSelect: true,
+                          _showComponentContextMenu(
+                            context: context,
+                            controller: controller,
+                            kind: _CanvasComponentKind.shape,
+                            id: shape.id,
                           );
                         },
                         onResize: (size) {
@@ -2069,7 +2177,9 @@ class _DiagramCanvasState extends State<DiagramCanvas>
                         onMove: (pos) {
                           controller.moveShape(shape.id, pos);
                         },
-                        onMoveEnd: controller.finishShapeMove,
+                        onMoveEnd: () {
+                          controller.finishShapeMove(shape.id);
+                        },
                       );
                     }),
                   ],
@@ -2191,8 +2301,8 @@ void _showSaveDialog(BuildContext context, DiagramController controller) {
   );
 }
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+class WorkspaceScreen extends StatelessWidget {
+  const WorkspaceScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -2202,9 +2312,18 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Learning Tech',
-          style: TextStyle(fontWeight: FontWeight.w900),
+        title: Row(
+          children: [
+            const Icon(Icons.account_tree_rounded, color: Color(0xFFF0C75C)),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                diagramController.currentProjectName ?? 'Untitled Project',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
         ),
 
         actions: [
@@ -2216,7 +2335,7 @@ class HomeScreen extends StatelessWidget {
               themeController.toggleLightDark();
             },
             icon: Icon(
-              themeController.isDarkMode
+              !(themeController.isDarkMode)
                   ? Icons.light_mode_rounded
                   : Icons.dark_mode_rounded,
             ),
@@ -2320,6 +2439,324 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+class HomeScreen extends StatelessWidget {
+  final VoidCallback? onStartWork;
+
+  const HomeScreen({super.key, this.onStartWork});
+
+  static const String _guideVideoUrl =
+      'https://www.youtube.com/watch?v=YOUR_VIDEO_ID';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Learning Tech',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        actions: [
+          Consumer<ThemeController>(
+            builder: (context, themeController, child) {
+              return IconButton(
+                tooltip: themeController.isDarkMode
+                    ? 'Switch to light mode'
+                    : 'Switch to dark mode',
+                onPressed: themeController.toggleLightDark,
+                icon: Icon(
+                  themeController.isDarkMode
+                      ? Icons.light_mode_rounded
+                      : Icons.dark_mode_rounded,
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 32),
+
+                  Container(
+                    width: 78,
+                    height: 78,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0C75C),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: const Icon(
+                      Icons.account_tree_rounded,
+                      size: 40,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  Text(
+                    'Communicate and animate your thoughts easily.',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      height: 1.15,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Text(
+                    'Create visual systems, connect ideas, and demonstrate how information flows.',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      height: 1.5,
+                      color: theme.textTheme.bodyMedium?.color?.withValues(
+                        alpha: 0.70,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 36),
+
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 600;
+
+                      final startWork = _HomeActionCard(
+                        icon: Icons.add_rounded,
+                        title: 'Start Work',
+                        description: 'Open a completely blank workspace and start building.',
+                        primary: true,
+                        onTap: () {
+                          final controller = context.read<DiagramController>();
+
+                          controller.startNewProject();
+
+                          if (onStartWork != null) {
+                            onStartWork!();
+                            return;
+                          }
+
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const WorkspaceScreen(),
+                            ),
+                          );
+                        },
+                      );
+
+                      final guideVideo = _HomeActionCard(
+                        icon: Icons.play_circle_outline_rounded,
+                        title: 'Guide Video',
+                        description:
+                            'Watch the Learning Tech guide on YouTube.',
+                        onTap: () {
+                          _openGuideVideo(context);
+                        },
+                      );
+
+                      if (isWide) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: startWork),
+                            const SizedBox(width: 16),
+                            Expanded(child: guideVideo),
+                          ],
+                        );
+                      }
+
+                      return Column(
+                        children: [
+                          startWork,
+                          const SizedBox(height: 16),
+                          guideVideo,
+                        ],
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 40),
+
+                  Text(
+                    'Your Work',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    'Open diagrams you have previously saved.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      _showHomeSavedFiles(
+                        context,
+                        context.read<DiagramController>(),
+                      );
+                    },
+                    icon: const Icon(Icons.folder_open_rounded),
+                    label: const Text('View Saved Work'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openGuideVideo(BuildContext context) async {
+    final uri = Uri.parse(_guideVideoUrl);
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the guide video.')),
+      );
+    }
+  }
+
+  void _showHomeSavedFiles(BuildContext context, DiagramController controller) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return _SavedFilesSheet(
+          controller: controller,
+          onOpen: (project) {
+            controller.importJson(project.data);
+
+            controller.currentProjectId = project.id;
+            controller.currentProjectName = project.name;
+            controller.currentFolder = project.folder;
+
+            Navigator.pop(sheetContext);
+
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const WorkspaceScreen()));
+          },
+          onDelete: (project) async {
+            await DiagramStorage().delete(project.id);
+
+            if (controller.currentProjectId == project.id) {
+              controller.currentProjectId = null;
+              controller.currentProjectName = null;
+            }
+          },
+        );
+      },
+    );
+  }
+}
+
+class _HomeActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+  final bool primary;
+
+  const _HomeActionCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: primary
+          ? const Color(0xFFF0C75C)
+          : theme.colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: primary
+                      ? const Color(0xFF111827)
+                      : const Color(0xFFF0C75C).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  icon,
+                  color: primary ? Colors.white : const Color(0xFFF0C75C),
+                ),
+              ),
+
+              const SizedBox(width: 18),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: primary ? const Color(0xFF111827) : null,
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      description,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 1.4,
+                        color: primary
+                            ? const Color(0xFF111827).withValues(alpha: 0.75)
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              Icon(
+                Icons.arrow_forward_rounded,
+                color: primary ? const Color(0xFF111827) : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ActionToolbar extends StatelessWidget {
   final DiagramController controller;
 
@@ -2371,7 +2808,22 @@ class _ActionToolbar extends StatelessWidget {
             _ToolButton(
               icon: Icons.undo_rounded,
               label: 'Undo',
+              enabled: controller.canUndo,
               onPressed: controller.undo,
+            ),
+
+            _ToolButton(
+              icon: Icons.redo_rounded,
+              label: 'Redo',
+              enabled: controller.canRedo,
+              onPressed: controller.redo,
+            ),
+
+            _ToolButton(
+              icon: Icons.copy_rounded,
+              label: 'Duplicate',
+              enabled: controller.canDuplicateSelection,
+              onPressed: controller.duplicateSelected,
             ),
 
             _ToolButton(
@@ -2441,180 +2893,6 @@ class _ActionToolbar extends StatelessWidget {
       _editGroup(context, controller, controller.selectedGroupId!);
       return;
     }
-  }
-
-  void _editShape(
-    BuildContext context,
-    DiagramController controller,
-    String id,
-  ) {
-    final shape = controller.findShape(id);
-
-    if (shape == null) return;
-
-    final textController = TextEditingController(text: shape.text);
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text(
-            'Edit Component',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
-          content: TextField(
-            controller: textController,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Component name',
-              hintText: 'Enter component name',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                controller.updateShapeText(id, textController.text);
-
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _editLine(
-    BuildContext context,
-    DiagramController controller,
-    String id,
-  ) {
-    final line = controller.findLine(id);
-
-    if (line == null) return;
-
-    final textController = TextEditingController(text: line.name);
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        LineType selectedType = line.type;
-
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text(
-                'Edit Connection',
-                style: TextStyle(fontWeight: FontWeight.w900),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: textController,
-                    decoration: const InputDecoration(
-                      labelText: 'Connection name',
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  SegmentedButton<LineType>(
-                    segments: const [
-                      ButtonSegment(
-                        value: LineType.single,
-                        label: Text('Single'),
-                        icon: Icon(Icons.arrow_forward),
-                      ),
-                      ButtonSegment(
-                        value: LineType.double,
-                        label: Text('Double'),
-                        icon: Icon(Icons.swap_horiz),
-                      ),
-                    ],
-                    selected: {selectedType},
-                    onSelectionChanged: (value) {
-                      setState(() {
-                        selectedType = value.first;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    controller.updateLineName(id, textController.text);
-
-                    controller.updateLineType(id, selectedType);
-
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _editGroup(
-    BuildContext context,
-    DiagramController controller,
-    String id,
-  ) {
-    final group = controller.findGroup(id);
-
-    if (group == null) return;
-
-    final textController = TextEditingController(text: group.name);
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text(
-            'Edit Container',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
-          content: TextField(
-            controller: textController,
-            decoration: const InputDecoration(labelText: 'Container name'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                controller.updateGroupName(id, textController.text);
-
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   void _confirmDeleteSelected(
@@ -2714,6 +2992,540 @@ class _ActionToolbar extends StatelessWidget {
   }
 }
 
+const List<Color> _diagramColors = [
+  Color(0xFF111827),
+  Color(0xFF334155),
+  Color(0xFF64748B),
+  Color(0xFFFFFFFF),
+  Color(0xFFF0C75C),
+  Color(0xFFFF7A00),
+  Color(0xFFEF4444),
+  Color(0xFFEC4899),
+  Color(0xFF8B5CF6),
+  Color(0xFF3B82F6),
+  Color(0xFF06B6D4),
+  Color(0xFF008080),
+  Color(0xFF10B981),
+  Color(0xFF84CC16),
+];
+
+class _DiagramColorSelector extends StatelessWidget {
+  final String label;
+  final Color selectedColor;
+  final ValueChanged<Color> onChanged;
+  final bool allowTransparent;
+
+  const _DiagramColorSelector({
+    required this.label,
+    required this.selectedColor,
+    required this.onChanged,
+    this.allowTransparent = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (allowTransparent)
+              _DiagramColorSwatch(
+                color: Colors.transparent,
+                selected:
+                    selectedColor.toARGB32() == Colors.transparent.toARGB32(),
+                onTap: () => onChanged(Colors.transparent),
+                transparent: true,
+              ),
+            ..._diagramColors.map(
+              (color) => _DiagramColorSwatch(
+                color: color,
+                selected: selectedColor.toARGB32() == color.toARGB32(),
+                onTap: () => onChanged(color),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DiagramColorSwatch extends StatelessWidget {
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool transparent;
+
+  const _DiagramColorSwatch({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+    this.transparent = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: transparent ? null : color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected
+                ? const Color(0xFFF0C75C)
+                : Theme.of(context).dividerColor,
+            width: selected ? 3 : 1.5,
+          ),
+        ),
+        child: transparent
+            ? const Icon(Icons.block, size: 20, color: Colors.redAccent)
+            : selected
+            ? Icon(
+                Icons.check,
+                size: 18,
+                color: color.computeLuminance() > 0.55
+                    ? const Color(0xFF111827)
+                    : Colors.white,
+              )
+            : null,
+      ),
+    );
+  }
+}
+
+void _editShape(BuildContext context, DiagramController controller, String id) {
+  final shape = controller.findShape(id);
+
+  if (shape == null) return;
+
+  final textController = TextEditingController(text: shape.text);
+
+  Color selectedBorderColor = shape.borderColor;
+  Color selectedBackgroundColor = shape.backgroundColor;
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text(
+              'Edit Component',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 430,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: textController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Component name',
+                        hintText: 'Enter component name',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _DiagramColorSelector(
+                      label: 'Fill colour',
+                      selectedColor: selectedBackgroundColor,
+                      allowTransparent: true,
+                      onChanged: (color) {
+                        setState(() {
+                          selectedBackgroundColor = color;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    _DiagramColorSelector(
+                      label: 'Border colour',
+                      selectedColor: selectedBorderColor,
+                      onChanged: (color) {
+                        setState(() {
+                          selectedBorderColor = color;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  controller.updateShapeText(id, textController.text);
+
+                  controller.updateShapeBackgroundColor(
+                    id,
+                    selectedBackgroundColor,
+                  );
+
+                  controller.updateShapeBorderColor(id, selectedBorderColor);
+
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+void _editLine(BuildContext context, DiagramController controller, String id) {
+  final line = controller.findLine(id);
+
+  if (line == null) return;
+
+  final textController = TextEditingController(text: line.name);
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      LineType selectedType = line.type;
+      Color selectedColor = line.color;
+
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text(
+              'Edit Connection',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: textController,
+                  decoration: const InputDecoration(
+                    labelText: 'Connection name',
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                SegmentedButton<LineType>(
+                  segments: const [
+                    ButtonSegment(
+                      value: LineType.single,
+                      label: Text('Single'),
+                      icon: Icon(Icons.arrow_forward),
+                    ),
+                    ButtonSegment(
+                      value: LineType.double,
+                      label: Text('Double'),
+                      icon: Icon(Icons.swap_horiz),
+                    ),
+                  ],
+                  selected: {selectedType},
+                  onSelectionChanged: (value) {
+                    setState(() {
+                      selectedType = value.first;
+                    });
+                  },
+                ),
+                const SizedBox(height: 24),
+
+                _DiagramColorSelector(
+                  label: 'Line colour',
+                  selectedColor: selectedColor,
+                  onChanged: (color) {
+                    setState(() {
+                      selectedColor = color;
+                    });
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  controller.updateLineName(id, textController.text);
+
+                  controller.updateLineType(id, selectedType);
+
+                  controller.updateLineColor(id, selectedColor);
+
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+void _editGroup(BuildContext context, DiagramController controller, String id) {
+  final group = controller.findGroup(id);
+
+  if (group == null) return;
+
+  final textController = TextEditingController(text: group.name);
+
+  Color selectedBorderColor = group.borderColor;
+  Color selectedBackgroundColor = group.backgroundColor;
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text(
+              'Edit Container',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 430,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: textController,
+                      decoration: const InputDecoration(
+                        labelText: 'Container name',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _DiagramColorSelector(
+                      label: 'Background colour',
+                      selectedColor: selectedBackgroundColor,
+                      allowTransparent: true,
+                      onChanged: (color) {
+                        setState(() {
+                          selectedBackgroundColor = color;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    _DiagramColorSelector(
+                      label: 'Border colour',
+                      selectedColor: selectedBorderColor,
+                      onChanged: (color) {
+                        setState(() {
+                          selectedBorderColor = color;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  controller.updateGroupName(id, textController.text);
+
+                  controller.updateGroupBackgroundColor(
+                    id,
+                    selectedBackgroundColor,
+                  );
+
+                  controller.updateGroupBorderColor(id, selectedBorderColor);
+
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+//selectedColor.a
+enum _CanvasComponentKind { shape, line, group }
+
+void _showComponentContextMenu({
+  required BuildContext context,
+  required DiagramController controller,
+  required _CanvasComponentKind kind,
+  required String id,
+}) {
+  // First make the long-pressed component the active selection.
+  switch (kind) {
+    case _CanvasComponentKind.shape:
+      controller.selectShape(id);
+      break;
+
+    case _CanvasComponentKind.line:
+      controller.selectLine(id);
+      break;
+
+    case _CanvasComponentKind.group:
+      controller.selectGroup(id);
+      break;
+  }
+
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      final canDuplicate =
+          kind == _CanvasComponentKind.shape ||
+          kind == _CanvasComponentKind.group;
+
+      return SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit'),
+              subtitle: const Text('Edit this component'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+
+                switch (kind) {
+                  case _CanvasComponentKind.shape:
+                    _editShape(context, controller, id);
+                    break;
+
+                  case _CanvasComponentKind.line:
+                    _editLine(context, controller, id);
+                    break;
+
+                  case _CanvasComponentKind.group:
+                    _editGroup(context, controller, id);
+                    break;
+                }
+              },
+            ),
+
+            if (canDuplicate)
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: const Text('Duplicate'),
+                subtitle: Text(
+                  kind == _CanvasComponentKind.shape
+                      ? 'Create a copy of this component'
+                      : 'Create a copy of this container',
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+
+                  controller.duplicateSelected();
+                },
+              ),
+
+            ListTile(
+              leading: const Icon(
+                Icons.delete_outline_rounded,
+                color: Colors.red,
+              ),
+              title: const Text(
+                'Delete',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: const Text('Remove this item from the workspace'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+
+                _confirmContextDelete(
+                  context: context,
+                  controller: controller,
+                  kind: kind,
+                );
+              },
+            ),
+
+            const SizedBox(height: 12),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+void _confirmContextDelete({
+  required BuildContext context,
+  required DiagramController controller,
+  required _CanvasComponentKind kind,
+}) {
+  String itemName;
+
+  switch (kind) {
+    case _CanvasComponentKind.shape:
+      itemName = 'component';
+      break;
+
+    case _CanvasComponentKind.line:
+      itemName = 'connection';
+      break;
+
+    case _CanvasComponentKind.group:
+      itemName = 'container';
+      break;
+  }
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: Text('Delete $itemName?'),
+        content: Text('This $itemName will be removed from the workspace.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              controller.deleteSelected();
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 class _ToolButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -2739,7 +3551,12 @@ class _ToolButton extends StatelessWidget {
           style: IconButton.styleFrom(
             foregroundColor: enabled ? const Color(0xFF111827) : null,
             backgroundColor: enabled
-                ? const Color(0xFFF0C75C).withValues(alpha: 0.22)
+                ? const Color.fromARGB(
+                    255,
+                    244,
+                    178,
+                    12,
+                  ).withValues(alpha: 0.22)
                 : null,
           ),
         ),
@@ -2811,21 +3628,27 @@ class _LinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     for (final line in controller.lines) {
-      final source = _findShape(line.sourceShapeId);
+      final sourceCenter = controller.centerOfNode(line.sourceShapeId);
 
-      final target = _findShape(line.targetShapeId);
+      final targetCenter = controller.centerOfNode(line.targetShapeId);
 
-      if (source == null || target == null) {
+      if (sourceCenter == null || targetCenter == null) {
         continue;
       }
 
-      final sourceCenter = controller.centerOf(source);
+      final start = controller.connectionPointForNode(
+        line.sourceShapeId,
+        targetCenter,
+      );
 
-      final targetCenter = controller.centerOf(target);
+      final end = controller.connectionPointForNode(
+        line.targetShapeId,
+        sourceCenter,
+      );
 
-      final start = controller.connectionPoint(source, targetCenter);
-
-      final end = controller.connectionPoint(target, sourceCenter);
+      if (start == null || end == null) {
+        continue;
+      }
 
       final isSelected = controller.isLineSelected(line.id);
       final lineColor = isSelected ? const Color(0xFFF0C75C) : line.color;
@@ -2856,16 +3679,6 @@ class _LinePainter extends CustomPainter {
         }
       }
     }
-  }
-
-  DiagramShape? _findShape(String id) {
-    for (final shape in controller.shapes) {
-      if (shape.id == id) {
-        return shape;
-      }
-    }
-
-    return null;
   }
 
   void _drawArrow(Canvas canvas, Offset tip, Offset previous, Color color) {
@@ -2966,6 +3779,7 @@ class _GroupWidget extends StatefulWidget {
   final DiagramGroup group;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
   final ValueChanged<Offset> onMove;
   final VoidCallback onMoveEnd;
   final ValueChanged<Size> onResize;
@@ -2975,6 +3789,7 @@ class _GroupWidget extends StatefulWidget {
     required this.group,
     required this.selected,
     required this.onTap,
+    required this.onLongPress,
     required this.onMove,
     required this.onMoveEnd,
     required this.onResize,
@@ -3001,6 +3816,7 @@ class _GroupWidgetState extends State<_GroupWidget> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
         onPanStart: (_) {
           _groupStartPosition = group.position;
           _totalDelta = Offset.zero;
@@ -3028,10 +3844,11 @@ class _GroupWidgetState extends State<_GroupWidget> {
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
+                  color: group.backgroundColor,
                   border: Border.all(
                     color: selected
                         ? const Color(0xFFF0C75C)
-                        : const Color(0xFF111827),
+                        : group.borderColor,
                     width: selected ? 3 : 2,
                   ),
                   borderRadius: BorderRadius.circular(18),
@@ -3106,24 +3923,12 @@ class ShapePalette extends StatelessWidget {
           const SizedBox(width: 10),
           _ToolCard(
             title: 'Container',
-            child: Row(
-              children:
-                  [
-                    ShapeType.square,
-                    ShapeType.rectangle,
-                    ShapeType.triangle,
-                    ShapeType.circle,
-                  ].map((type) {
-                    return _ShapeChoice(
-                      label: _label(type),
-                      selected:
-                          controller.activeContainerType == type &&
-                          controller.activeTool == CanvasTool.container,
-                      onTap: () {
-                        controller.setContainerType(type);
-                      },
-                    );
-                  }).toList(),
+            child: _ShapeChoice(
+              label: 'Container',
+              selected: controller.activeTool == CanvasTool.container,
+              onTap: () {
+                controller.setTool(CanvasTool.container);
+              },
             ),
           ),
           const SizedBox(width: 10),
@@ -3229,465 +4034,6 @@ class _ShapeChoice extends StatelessWidget {
               fontWeight: selected ? FontWeight.bold : FontWeight.w500,
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class Course {
-  final String id;
-  final String name;
-  final String description;
-  final IconData icon;
-  final Color color;
-  final String practiceUrl;
-  final String gameUrl;
-  final String category;
-
-  const Course({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.icon,
-    required this.color,
-    required this.practiceUrl,
-    required this.gameUrl,
-    required this.category,
-  });
-}
-
-class CourseController extends ChangeNotifier {
-  final List<Course> _courses = const [
-    Course(
-      id: 'html',
-      name: 'HTML5',
-      description: 'Learn how to structure professional, semantic and accessible websites.',
-      icon: Icons.html,
-      color: Color(0xFFE44D26),
-      practiceUrl: 'https://developer.mozilla.org/en-US/docs/Web/HTML',
-      gameUrl: 'https://developer.mozilla.org/en-US/docs/Web/HTML',
-      category: 'Web Development',
-    ),
-
-    Course(
-      id: 'css',
-      name: 'CSS3',
-      description: 'Master responsive layouts, animations, positioning, grids and modern styling.',
-      icon: Icons.style,
-      color: Color(0xFF1572B6),
-      practiceUrl: 'https://developer.mozilla.org/en-US/docs/Web/CSS',
-      gameUrl: 'https://developer.mozilla.org/en-US/docs/Web/CSS',
-      category: 'Web Development',
-    ),
-
-    Course(
-      id: 'javascript',
-      name: 'JavaScript',
-      description: 'Build interactive web applications using modern JavaScript and browser APIs.',
-      icon: Icons.javascript,
-      color: Color(0xFFF7DF1E),
-      practiceUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript',
-      gameUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript',
-      category: 'Web Development',
-    ),
-
-    Course(
-      id: 'flutter',
-      name: 'Flutter',
-      description: 'Build responsive cross-platform mobile, desktop and web applications.',
-      icon: Icons.flutter_dash,
-      color: Color(0xFF02569B),
-      practiceUrl: 'https://docs.flutter.dev/',
-      gameUrl: 'https://docs.flutter.dev/',
-      category: 'App Development',
-    ),
-
-    Course(
-      id: 'dart',
-      name: 'Dart',
-      description: 'Learn the Dart language powering modern Flutter application development.',
-      icon: Icons.code,
-      color: Color(0xFF0175C2),
-      practiceUrl: 'https://dart.dev/language',
-      gameUrl: 'https://dart.dev/language',
-      category: 'App Development',
-    ),
-
-    Course(
-      id: 'aws',
-      name: 'AWS',
-      description: 'Practice cloud architecture using EC2, VPC, ALB, ASG, IAM, S3 and more.',
-      icon: Icons.cloud,
-      color: Color(0xFFFF9900),
-      practiceUrl: 'https://aws.amazon.com/getting-started/',
-      gameUrl: 'https://aws.amazon.com/getting-started/',
-      category: 'Cloud',
-    ),
-
-    Course(
-      id: 'azure',
-      name: 'Microsoft Azure',
-      description: 'Explore Azure compute, networking, identity, storage and cloud architecture.',
-      icon: Icons.cloud_queue,
-      color: Color(0xFF0078D4),
-      practiceUrl: 'https://learn.microsoft.com/azure/',
-      gameUrl: 'https://learn.microsoft.com/azure/',
-      category: 'Cloud',
-    ),
-
-    Course(
-      id: 'gcp',
-      name: 'Google Cloud',
-      description: 'Learn compute, networking, storage, IAM and scalable Google Cloud architectures.',
-      icon: Icons.cloud_circle,
-      color: Color(0xFF4285F4),
-      practiceUrl: 'https://cloud.google.com/docs',
-      gameUrl: 'https://cloud.google.com/docs',
-      category: 'Cloud',
-    ),
-
-    Course(
-      id: 'docker',
-      name: 'Docker',
-      description: 'Learn containers, images, Dockerfiles, networks, volumes and deployments.',
-      icon: Icons.inventory_2,
-      color: Color(0xFF2496ED),
-      practiceUrl: 'https://docs.docker.com/get-started/',
-      gameUrl: 'https://docs.docker.com/get-started/',
-      category: 'DevOps',
-    ),
-
-    Course(
-      id: 'github-actions',
-      name: 'GitHub Actions',
-      description: 'Create CI/CD workflows for testing, building and deploying applications.',
-      icon: Icons.account_tree,
-      color: Color(0xFF24292F),
-      practiceUrl: 'https://docs.github.com/actions',
-      gameUrl: 'https://docs.github.com/actions',
-      category: 'DevOps',
-    ),
-
-    Course(
-      id: 'kubernetes',
-      name: 'Kubernetes',
-      description: 'Understand containers orchestration, pods, services, deployments and clusters.',
-      icon: Icons.hub,
-      color: Color(0xFF326CE5),
-      practiceUrl: 'https://kubernetes.io/docs/home/',
-      gameUrl: 'https://kubernetes.io/docs/home/',
-      category: 'DevOps',
-    ),
-
-    Course(
-      id: 'terraform',
-      name: 'Terraform',
-      description: 'Practice infrastructure as code and repeatable cloud infrastructure deployment.',
-      icon: Icons.construction,
-      color: Color(0xFF844FBA),
-      practiceUrl: 'https://developer.hashicorp.com/terraform/docs',
-      gameUrl: 'https://developer.hashicorp.com/terraform/docs',
-      category: 'Infrastructure',
-    ),
-
-    Course(
-      id: 'lambda',
-      name: 'AWS Lambda',
-      description:
-          'Build serverless applications using event-driven cloud functions.',
-      icon: Icons.functions,
-      color: Color(0xFFFF9900),
-      practiceUrl: 'https://docs.aws.amazon.com/lambda/',
-      gameUrl: 'https://docs.aws.amazon.com/lambda/',
-      category: 'Serverless',
-    ),
-
-    Course(
-      id: 'cloud-security',
-      name: 'Cloud Security',
-      description: 'Learn IAM, encryption, network security, secrets and cloud security principles.',
-      icon: Icons.security,
-      color: Color(0xFF64748B),
-      practiceUrl: 'https://aws.amazon.com/security/',
-      gameUrl: 'https://aws.amazon.com/security/',
-      category: 'Security',
-    ),
-
-    Course(
-      id: 'devops',
-      name: 'DevOps',
-      description: 'Combine development, automation, CI/CD, monitoring and infrastructure practices.',
-      icon: Icons.sync_alt,
-      color: Color(0xFF475569),
-      practiceUrl: 'https://aws.amazon.com/devops/',
-      gameUrl: 'https://aws.amazon.com/devops/',
-      category: 'DevOps',
-    ),
-
-    Course(
-      id: 'databases',
-      name: 'Databases',
-      description: 'Understand relational, NoSQL, distributed and cloud database architecture.',
-      icon: Icons.storage,
-      color: Color(0xFF0F766E),
-      practiceUrl: 'https://www.mongodb.com/docs/',
-      gameUrl: 'https://www.mongodb.com/docs/',
-      category: 'Backend',
-    ),
-
-    Course(
-      id: 'git',
-      name: 'Git & GitHub',
-      description: 'Learn source control, branching, merging, pull requests and collaboration.',
-      icon: Icons.merge_type,
-      color: Color(0xFFF05032),
-      practiceUrl: 'https://docs.github.com/',
-      gameUrl: 'https://docs.github.com/',
-      category: 'Development',
-    ),
-
-    Course(
-      id: 'agentic-ai',
-      name: 'Agentic AI',
-      description: 'Explore AI agents, tools, workflows, orchestration and autonomous systems.',
-      icon: Icons.auto_awesome,
-      color: Color(0xFF7C3AED),
-      practiceUrl: 'https://platform.openai.com/docs',
-      gameUrl: 'https://platform.openai.com/docs',
-      category: 'Artificial Intelligence',
-    ),
-  ];
-
-  List<Course> get courses => List.unmodifiable(_courses);
-
-  List<String> get categories {
-    return _courses.map((course) => course.category).toSet().toList();
-  }
-
-  List<Course> byCategory(String category) {
-    return _courses.where((course) => course.category == category).toList();
-  }
-
-  Course? findById(String id) {
-    for (final course in _courses) {
-      if (course.id == id) {
-        return course;
-      }
-    }
-
-    return null;
-  }
-}
-
-class CourseCard extends StatelessWidget {
-  final Course course;
-  final VoidCallback onPractice;
-
-  const CourseCard({super.key, required this.course, required this.onPractice});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.12)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: course.color.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(course.icon, color: course.color, size: 28),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    course.category,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 18),
-
-            Text(
-              course.name,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            Expanded(
-              child: Text(
-                course.description,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  height: 1.5,
-                  color: theme.textTheme.bodyMedium?.color?.withValues(
-                    alpha: 0.72,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  openCourseUrl(
-                    context,
-                    title: '${course.name} Practice',
-                    url: course.practiceUrl,
-                  );
-                },
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text('Practice Project'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFF0C75C),
-                  foregroundColor: const Color(0xFF111827),
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class GameCard extends StatelessWidget {
-  final Course course;
-  final VoidCallback onPlay;
-
-  const GameCard({super.key, required this.course, required this.onPlay});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.12)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFFF0C75C).withValues(alpha: 0.28),
-                        course.color.withValues(alpha: 0.10),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(17),
-                  ),
-                  child: Icon(
-                    Icons.sports_esports_outlined,
-                    color: course.color,
-                    size: 29,
-                  ),
-                ),
-                const Spacer(),
-                Icon(course.icon, color: course.color),
-              ],
-            ),
-
-            const SizedBox(height: 18),
-
-            Text(
-              '${course.name} Game',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            Expanded(
-              child: Text(
-                'Test your knowledge of ${course.name} through an interactive technology challenge.',
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  height: 1.5,
-                  color: theme.textTheme.bodyMedium?.color?.withValues(
-                    alpha: 0.72,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  openCourseUrl(
-                    context,
-                    title: '${course.name} Game',
-                    url: course.gameUrl,
-                  );
-                },
-                icon: const Icon(Icons.play_arrow_rounded, size: 21),
-                label: const Text('Play Course Game'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFF0C75C),
-                  foregroundColor: const Color(0xFF111827),
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -3860,835 +4206,6 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
-class CoursesScreen extends StatefulWidget {
-  const CoursesScreen({super.key});
-
-  @override
-  State<CoursesScreen> createState() => _CoursesScreenState();
-}
-
-class _CoursesScreenState extends State<CoursesScreen> {
-  String _selectedCategory = 'All';
-  String _search = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = context.watch<CourseController>();
-    final theme = Theme.of(context);
-
-    final categories = ['All', ...controller.categories];
-
-    final courses = controller.courses.where((course) {
-      final categoryMatch =
-          _selectedCategory == 'All' || course.category == _selectedCategory;
-
-      final searchMatch =
-          _search.trim().isEmpty ||
-          course.name.toLowerCase().contains(_search.toLowerCase()) ||
-          course.description.toLowerCase().contains(_search.toLowerCase());
-
-      return categoryMatch && searchMatch;
-    }).toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Courses',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Search',
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              _showSearchDialog(context);
-            },
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _CoursesHeader(
-              totalCourses: controller.courses.length,
-              search: _search,
-            ),
-
-            SizedBox(
-              height: 52,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                scrollDirection: Axis.horizontal,
-                itemCount: categories.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final category = categories[index];
-                  final selected = category == _selectedCategory;
-
-                  return ChoiceChip(
-                    label: Text(category),
-                    selected: selected,
-                    onSelected: (_) {
-                      setState(() {
-                        _selectedCategory = category;
-                      });
-                    },
-                    selectedColor: const Color(0xFFF0C75C),
-                    labelStyle: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: selected
-                          ? const Color(0xFF111827)
-                          : theme.textTheme.bodyMedium?.color,
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            Expanded(
-              child: courses.isEmpty
-                  ? const _EmptyCourses()
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final width = constraints.maxWidth;
-
-                        int columns;
-
-                        if (width >= 1200) {
-                          columns = 4;
-                        } else if (width >= 850) {
-                          columns = 3;
-                        } else if (width >= 560) {
-                          columns = 2;
-                        } else {
-                          columns = 1;
-                        }
-
-                        return GridView.builder(
-                          padding: const EdgeInsets.all(20),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: columns,
-                                crossAxisSpacing: 16,
-                                mainAxisSpacing: 16,
-                                childAspectRatio: columns == 1 ? 1.35 : 0.92,
-                              ),
-                          itemCount: courses.length,
-                          itemBuilder: (context, index) {
-                            final course = courses[index];
-
-                            return CourseCard(
-                              course: course,
-                              onPractice: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => WebViewScreen(
-                                      title: '${course.name} Practice',
-                                      url: course.practiceUrl,
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showSearchDialog(BuildContext context) {
-    final controller = TextEditingController(text: _search);
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Search Courses'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'AWS, Flutter, Docker...',
-              prefixIcon: Icon(Icons.search),
-            ),
-            onSubmitted: (_) {
-              setState(() {
-                _search = controller.text;
-              });
-
-              Navigator.pop(dialogContext);
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                controller.clear();
-
-                setState(() {
-                  _search = '';
-                });
-
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Clear'),
-            ),
-            FilledButton(
-              onPressed: () {
-                setState(() {
-                  _search = controller.text;
-                });
-
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Search'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _CoursesHeader extends StatelessWidget {
-  final int totalCourses;
-  final String search;
-
-  const _CoursesHeader({required this.totalCourses, required this.search});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              const Color(0xFFF0C75C).withValues(alpha: 0.18),
-              theme.colorScheme.surface,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: const Color(0xFFF0C75C).withValues(alpha: 0.35),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 55,
-              height: 55,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0C75C),
-                borderRadius: BorderRadius.circular(17),
-              ),
-              child: const Icon(
-                Icons.school_rounded,
-                color: Color(0xFF111827),
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Learn Technology',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    search.isEmpty
-                        ? '$totalCourses technology courses available'
-                        : 'Searching for "$search"',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyCourses extends StatelessWidget {
-  const _EmptyCourses();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.search_off_rounded,
-            size: 60,
-            color: Theme.of(context).colorScheme.onSurface
-                .withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'No courses found',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          const Text('Try another search or category.'),
-        ],
-      ),
-    );
-  }
-}
-
-class GamesScreen extends StatefulWidget {
-  const GamesScreen({super.key});
-
-  @override
-  State<GamesScreen> createState() => _GamesScreenState();
-}
-
-class _GamesScreenState extends State<GamesScreen> {
-  String _selectedCategory = 'All';
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = context.watch<CourseController>();
-
-    final categories = ['All', ...controller.categories];
-
-    final games = _selectedCategory == 'All'
-        ? controller.courses
-        : controller.byCategory(_selectedCategory);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Games',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Game Help',
-            onPressed: () => _showGameHelp(context),
-            icon: const Icon(Icons.help_outline),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFFF0C75C).withValues(alpha: 0.22),
-                      Theme.of(context).colorScheme.surface,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: const Color(0xFFF0C75C).withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 58,
-                      height: 58,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0C75C),
-                        borderRadius: BorderRadius.circular(17),
-                      ),
-                      child: const Icon(
-                        Icons.sports_esports_rounded,
-                        color: Color(0xFF111827),
-                        size: 30,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Technology Challenge',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w900),
-                          ),
-                          const SizedBox(height: 5),
-                          const Text(
-                            'Practice what you have learned and test your technical knowledge.',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            SizedBox(
-              height: 52,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                scrollDirection: Axis.horizontal,
-                itemCount: categories.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final category = categories[index];
-                  final selected = category == _selectedCategory;
-
-                  return ChoiceChip(
-                    label: Text(category),
-                    selected: selected,
-                    onSelected: (_) {
-                      setState(() {
-                        _selectedCategory = category;
-                      });
-                    },
-                    selectedColor: const Color(0xFFF0C75C),
-                    labelStyle: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: selected ? const Color(0xFF111827) : null,
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = constraints.maxWidth;
-
-                  int columns;
-
-                  if (width >= 1200) {
-                    columns = 4;
-                  } else if (width >= 850) {
-                    columns = 3;
-                  } else if (width >= 560) {
-                    columns = 2;
-                  } else {
-                    columns = 1;
-                  }
-
-                  return GridView.builder(
-                    padding: const EdgeInsets.all(20),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: columns,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: columns == 1 ? 1.35 : 0.92,
-                    ),
-                    itemCount: games.length,
-                    itemBuilder: (context, index) {
-                      final course = games[index];
-
-                      return GameCard(
-                        course: course,
-                        onPlay: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => WebViewScreen(
-                                title: '${course.name} Game',
-                                url: course.gameUrl,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showGameHelp(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 10, 24, 30),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'How Games Work',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 16),
-                _HelpRow(
-                  icon: Icons.play_arrow_rounded,
-                  text: 'Choose a technology and start its challenge.',
-                ),
-                _HelpRow(
-                  icon: Icons.quiz_outlined,
-                  text: 'Answer technical questions and complete challenges.',
-                ),
-                _HelpRow(
-                  icon: Icons.emoji_events_outlined,
-                  text: 'Use your results to identify areas that need more practice.',
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HelpRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _HelpRow({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.circle, size: 9, color: Color(0xFFF0C75C)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(text, style: Theme.of(context).textTheme.bodyLarge),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ContactScreen extends StatelessWidget {
-  const ContactScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Contact Us',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 850),
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0C75C),
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFF0C75C)
-                              .withValues(alpha: 0.25),
-                          blurRadius: 30,
-                          spreadRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.school_rounded,
-                      size: 50,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  Text(
-                    'Learning Tech',
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  Text(
-                    'Learn. Practice. Design. Demonstrate.',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: theme.textTheme.bodyMedium?.color?.withValues(
-                        alpha: 0.65,
-                      ),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 35),
-
-                  _InfoCard(
-                    icon: Icons.description_outlined,
-                    title: 'About Learning Tech',
-                    description: 'Learning Tech is designed to help technology learners understand concepts visually, practice technical skills and demonstrate how systems work through interactive diagrams.',
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  _InfoCard(
-                    icon: Icons.account_tree_outlined,
-                    title: 'Visual System Design',
-                    description: 'Create your own architecture diagrams by placing components, connecting them with lines, grouping related components and demonstrating how information flows through a system.',
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  _InfoCard(
-                    icon: Icons.school_outlined,
-                    title: 'Technology Learning',
-                    description: 'Explore Web Development, Flutter, Dart, AWS, Azure, Google Cloud, Docker, Kubernetes, GitHub Actions, Terraform, DevOps, Databases and Artificial Intelligence.',
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  _ContactTile(
-                    icon: Icons.email_outlined,
-                    title: 'Email',
-                    value: 'your-email@example.com',
-                    onTap: () {},
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  _ContactTile(
-                    icon: Icons.language_outlined,
-                    title: 'Website',
-                    value: 'your-website.com',
-                    onTap: () {},
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  _ContactTile(
-                    icon: Icons.business_outlined,
-                    title: 'Technology Portfolio',
-                    value: 'Learning Tech Portfolio',
-                    onTap: () {},
-                  ),
-
-                  const SizedBox(height: 35),
-
-                  Text(
-                    'Built with Flutter & Dart',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: theme.textTheme.bodyMedium?.color?.withValues(
-                        alpha: 0.55,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    '© ${DateTime.now().year} Learning Tech',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-
-  const _InfoCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.12)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0C75C).withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: const Icon(
-              Icons.lightbulb_outline,
-              color: Color(0xFFF0C75C),
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(icon, size: 18, color: const Color(0xFFF0C75C)),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 9),
-
-                Text(
-                  description,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    height: 1.55,
-                    color: theme.textTheme.bodyMedium?.color?.withValues(
-                      alpha: 0.72,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ContactTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String value;
-  final VoidCallback onTap;
-
-  const _ContactTile({
-    required this.icon,
-    required this.title,
-    required this.value,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(17),
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(17),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.12)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0C75C).withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: const Color(0xFFF0C75C)),
-            ),
-
-            const SizedBox(width: 14),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    value,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const Icon(Icons.chevron_right),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -4699,18 +4216,34 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [
-    HomeScreen(),
-    CoursesScreen(),
-    GamesScreen(),
-    ContactScreen(),
-  ];
+  bool _workspaceOpen = false;
+
+  void _openWorkspace() {
+    setState(() {
+      _workspaceOpen = true;
+    });
+  }
+
+  // void _openHome() {
+  //   setState(() {
+  //     _workspaceOpen = false;
+  //     _currentIndex = 0;
+  //   });
+  // }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _pages),
+    final pages = <Widget>[
+      _workspaceOpen
+          ? const WorkspaceScreen()
+          : HomeScreen(onStartWork: _openWorkspace),
+      const CoursesScreen(),
+      const GamesScreen(),
+      const JobsScreen(),
+    ];
 
+    return Scaffold(
+      body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
@@ -4720,8 +4253,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.account_tree_outlined),
-            selectedIcon: Icon(Icons.account_tree),
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
             label: 'Home',
           ),
           NavigationDestination(
@@ -4735,9 +4268,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             label: 'Games',
           ),
           NavigationDestination(
-            icon: Icon(Icons.contact_page_outlined),
-            selectedIcon: Icon(Icons.contact_page),
-            label: 'Contact',
+            icon: Icon(Icons.work_outline_rounded),
+            selectedIcon: Icon(Icons.work_rounded),
+            label: 'Jobs',
           ),
         ],
       ),

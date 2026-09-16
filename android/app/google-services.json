@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "366668542659",
+    "project_id": "animate-87fd5",
+    "storage_bucket": "animate-87fd5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:366668542659:android:7ca2cc1fbdba49f1152876",
+        "android_client_info": {
+          "package_name": "com.earndeelimited.nfcs"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDAJIC9SgNcIViqj0L7YKoO99Qs4QSUx4w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

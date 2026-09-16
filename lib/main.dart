@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:learn/courses/course.dart';
 import 'package:learn/home.dart';
 import 'package:provider/provider.dart';
 
@@ -26,4 +27,3 @@ Future<void> main() async {
     ),
   );
 }
-

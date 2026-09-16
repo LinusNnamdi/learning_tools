@@ -7,7 +7,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:learn/common/common.dart';
+import 'package:learn/courses/course.dart';
 import 'package:learn/home.dart';
+import 'package:learn/jobs/jobs.dart';
 
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -110,11 +113,162 @@ void main() {
       expect(controller.lines, hasLength(1));
     });
 
+    test('container can connect to shape', () {
+      controller.addContainer(const Offset(50, 50));
+      final groupId = controller.groups.first.id;
+
+      controller.addShape(const Offset(600, 100));
+      final shapeId = controller.shapes.first.id;
+
+      controller.connectNodes(groupId, shapeId);
+
+      expect(controller.lines, hasLength(1));
+      expect(controller.lines.first.sourceShapeId, groupId);
+      expect(controller.lines.first.targetShapeId, shapeId);
+    });
+
+    test('container can connect to another container', () async {
+      controller.addContainer(const Offset(50, 50));
+      final firstId = controller.groups.first.id;
+
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+
+      controller.addContainer(const Offset(700, 50));
+      final secondId = controller.groups.last.id;
+
+      expect(firstId, isNot(secondId));
+
+      controller.connectNodes(firstId, secondId);
+
+      expect(controller.lines, hasLength(1));
+      expect(controller.lines.first.sourceShapeId, firstId);
+      expect(controller.lines.first.targetShapeId, secondId);
+    });
+
+    test('container child lists remain mutable', () {
+      controller.addContainer(const Offset(100, 100));
+      final group = controller.groups.first;
+
+      controller.addShape(const Offset(150, 150));
+      final shape = controller.shapes.first;
+
+      expect(() => controller.finishShapeMove(shape.id), returnsNormally);
+
+      expect(group.childShapeIds, contains(shape.id));
+    });
+
+    test('container colors can be updated', () {
+      controller.addContainer(const Offset(100, 100));
+      final group = controller.groups.first;
+
+      controller.updateGroupBorderColor(group.id, const Color(0xFF3B82F6));
+
+      controller.updateGroupBackgroundColor(group.id, const Color(0xFFDBEAFE));
+
+      expect(group.borderColor, const Color(0xFF3B82F6));
+
+      expect(group.backgroundColor, const Color(0xFFDBEAFE));
+    });
+
+    test('shape colors can be updated independently', () {
+      controller.addShape(const Offset(100, 100));
+      final shape = controller.shapes.first;
+
+      controller.updateShapeBorderColor(shape.id, const Color(0xFFEF4444));
+
+      controller.updateShapeBackgroundColor(shape.id, const Color(0xFFFEE2E2));
+
+      expect(shape.borderColor, const Color(0xFFEF4444));
+
+      expect(shape.backgroundColor, const Color(0xFFFEE2E2));
+    });
+
+    test('line color can be updated independently', () {
+      controller.addShape(const Offset(0, 0));
+      final first = controller.shapes.first;
+
+      controller.addShape(const Offset(300, 0));
+      final second = controller.shapes.last;
+
+      controller.connectShapes(first.id, second.id);
+
+      final line = controller.lines.first;
+
+      controller.updateLineColor(line.id, const Color(0xFF008080));
+
+      expect(line.color, const Color(0xFF008080));
+    });
+
+    test('moving container moves contained shapes', () {
+      controller.addContainer(const Offset(100, 100));
+      final group = controller.groups.first;
+
+      controller.addShape(const Offset(150, 150));
+      final shape = controller.shapes.first;
+
+      controller.finishShapeMove(shape.id);
+
+      final oldShapePosition = shape.position;
+
+      controller.moveGroup(group.id, const Offset(200, 200));
+
+      expect(shape.position, oldShapePosition + const Offset(100, 100));
+    });
+
     test('moveShape updates position', () {
       controller.addShape(const Offset(10, 20));
       final id = controller.shapes.first.id;
       controller.moveShape(id, const Offset(80, 90));
       expect(controller.shapes.first.position, const Offset(80, 90));
+    });
+
+    test('selectShape then deleteSelected removes selected shape', () {
+      controller.addShape(const Offset(100, 100));
+
+      final id = controller.shapes.first.id;
+
+      controller.selectShape(id);
+      controller.deleteSelected();
+
+      expect(controller.shapes, isEmpty);
+      expect(controller.hasSelection, isFalse);
+    });
+
+    test('selectLine then deleteSelected removes selected line', () async {
+      controller.addShape(const Offset(0, 0));
+      final firstId = controller.shapes.first.id;
+
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+
+      controller.addShape(const Offset(300, 0));
+      final secondId = controller.shapes.last.id;
+
+      controller.connectShapes(firstId, secondId);
+
+      expect(controller.lines, hasLength(1));
+
+      final lineId = controller.lines.first.id;
+
+      controller.selectLine(lineId);
+      controller.deleteSelected();
+
+      expect(controller.lines, isEmpty);
+
+      // Deleting a connection must not delete its endpoint shapes.
+      expect(controller.shapes, hasLength(2));
+    });
+
+    test('shape becomes child of container after move finishes', () {
+      controller.addContainer(const Offset(100, 100));
+      final group = controller.groups.first;
+
+      controller.addShape(const Offset(150, 150));
+      final shape = controller.shapes.first;
+
+      controller.finishShapeMove(shape.id);
+
+      expect(shape.parentContainerId, group.id);
+      expect(group.childShapeIds, contains(shape.id));
     });
 
     test('moveGroup updates position', () {
@@ -247,13 +401,41 @@ void main() {
       expect(miss, isNull);
     });
 
-    test('undo restores previous snapshot', () {
+    test('undo and redo restore diagram snapshots', () {
       controller.addShape(const Offset(0, 0));
       expect(controller.shapes, hasLength(1));
+
       controller.clearCanvas();
       expect(controller.shapes, isEmpty);
+
       controller.undo();
+
       expect(controller.shapes, hasLength(1));
+      expect(controller.canRedo, isTrue);
+
+      controller.redo();
+
+      expect(controller.shapes, isEmpty);
+      expect(controller.canUndo, isTrue);
+    });
+
+    test('duplicateSelected duplicates selected shape', () {
+      controller.addShape(const Offset(100, 100), type: ShapeType.rectangle);
+
+      final original = controller.shapes.first;
+
+      controller.duplicateSelected();
+
+      expect(controller.shapes, hasLength(2));
+
+      final duplicate = controller.shapes.last;
+
+      expect(duplicate.id, isNot(original.id));
+      expect(duplicate.type, original.type);
+      expect(duplicate.width, original.width);
+      expect(duplicate.height, original.height);
+      expect(duplicate.position, original.position + const Offset(30, 30));
+      expect(duplicate.text, '${original.text} Copy');
     });
 
     test('play / pause / resetAnimation', () {
@@ -283,6 +465,54 @@ void main() {
       final web = c.byCategory('Web Development');
       expect(web, isNotEmpty);
       expect(web.every((x) => x.category == 'Web Development'), isTrue);
+    });
+
+    test('courses contain learning, project and game urls', () {
+      final controller = CourseController();
+
+      for (final course in controller.courses) {
+        expect(
+          course.learnUrl,
+          isNotEmpty,
+          reason: '${course.name} must have a learn URL',
+        );
+
+        expect(
+          course.projectUrl,
+          isNotEmpty,
+          reason: '${course.name} must have a project URL',
+        );
+
+        expect(
+          course.gameUrl,
+          isNotEmpty,
+          reason: '${course.name} must have a game URL',
+        );
+      }
+    });
+
+    test('project urls use projects/home.html', () {
+      final controller = CourseController();
+
+      for (final course in controller.courses) {
+        expect(
+          course.projectUrl.endsWith('/projects/home.html'),
+          isTrue,
+          reason: '${course.name} has an invalid project URL',
+        );
+      }
+    });
+
+    test('game urls use games/home.html', () {
+      final controller = CourseController();
+
+      for (final course in controller.courses) {
+        expect(
+          course.gameUrl.endsWith('/games/home.html'),
+          isTrue,
+          reason: '${course.name} has an invalid game URL',
+        );
+      }
     });
 
     test('findById returns matching course', () {
@@ -343,7 +573,7 @@ void main() {
   // Widget tests
   // ---------------------------------------------------------------------------
   group('LearningTechApp widgets', () {
-    testWidgets('WelcomeScreen shows app title and loading text', (
+    testWidgets('WelcomeScreen shows branding and loading state', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -366,6 +596,23 @@ void main() {
 
       // Advance past the 5s auto-navigation timer without hanging
       await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('HomeScreen shows Start Work and Guide Video', (tester) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeController()),
+            ChangeNotifierProvider(create: (_) => DiagramController()),
+            ChangeNotifierProvider(create: (_) => CourseController()),
+          ],
+          child: MaterialApp(theme: AppTheme.light, home: const HomeScreen()),
+        ),
+      );
+
+      expect(find.text('Start Work'), findsOneWidget);
+      expect(find.text('Guide Video'), findsOneWidget);
+      expect(find.text('View Saved Work'), findsOneWidget);
     });
 
     testWidgets('MainNavigationScreen shows bottom destinations', (
@@ -403,7 +650,10 @@ void main() {
             ChangeNotifierProvider<DiagramController>.value(value: diagram),
             ChangeNotifierProvider(create: (_) => CourseController()),
           ],
-          child: MaterialApp(theme: AppTheme.light, home: const HomeScreen()),
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: const WorkspaceScreen(),
+          ),
         ),
       );
 
@@ -413,7 +663,7 @@ void main() {
 
       expect(find.text('Save'), findsOneWidget);
       expect(find.byTooltip('Help'), findsOneWidget);
-      expect(find.text('Learning Tech'), findsOneWidget);
+      expect(find.text('Untitled Project'), findsOneWidget);
     });
 
     testWidgets('CoursesScreen lists courses and filters by category', (
@@ -462,6 +712,83 @@ void main() {
       );
     });
 
+    testWidgets('Course cards show Learn and Practice Project actions', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeController()),
+            ChangeNotifierProvider(create: (_) => DiagramController()),
+            ChangeNotifierProvider(create: (_) => CourseController()),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: const CoursesScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Learn'), findsWidgets);
+
+      expect(find.text('Practice Project'), findsWidgets);
+    });
+
+    testWidgets('JobsScreen defaults to Contact Us tab', (tester) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeController()),
+            ChangeNotifierProvider(create: (_) => DiagramController()),
+            ChangeNotifierProvider(create: (_) => CourseController()),
+          ],
+          child: MaterialApp(theme: AppTheme.light, home: const JobsScreen()),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Jobs'), findsOneWidget);
+
+      expect(find.text('Contact Us'), findsOneWidget);
+
+      expect(find.text('Find Jobs'), findsOneWidget);
+
+      expect(find.text('WhatsApp'), findsOneWidget);
+
+      expect(find.text('Email'), findsOneWidget);
+
+      expect(find.text('TikTok'), findsOneWidget);
+
+      expect(find.text('LinkedIn'), findsOneWidget);
+
+      expect(find.text('GitHub'), findsOneWidget);
+    });
+
+    testWidgets('JobsScreen opens Find Jobs form', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(theme: AppTheme.light, home: const JobsScreen()),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Find Jobs'));
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Job Finder'), findsOneWidget);
+
+      expect(find.text('Your Skills'), findsOneWidget);
+
+      expect(find.text('Your Current Location'), findsOneWidget);
+
+      expect(find.text('Where Do You Want to Work?'), findsOneWidget);
+
+      expect(find.text('Find Jobs With'), findsOneWidget);
+    });
+
     testWidgets('navigating bottom bar switches pages', (tester) async {
       await tester.pumpWidget(
         MultiProvider(
@@ -484,15 +811,60 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Learn Technology'), findsOneWidget);
 
-      // Contact tab
-      await tester.tap(find.text('Contact').last);
+      // Jobs tab
+      await tester.tap(find.text('Jobs').last);
       await tester.pumpAndSettle();
       expect(find.text('Contact Us'), findsOneWidget);
+      expect(find.text('Find Jobs'), findsOneWidget);
 
+      // Home tab
       // Home tab
       await tester.tap(find.text('Home').last);
       await tester.pumpAndSettle();
-      expect(find.text('Save'), findsOneWidget);
+      expect(find.text('Start Work'), findsOneWidget);
+      expect(find.text('Guide Video'), findsOneWidget);
+    });
+  });
+
+  group('JobSearchRequest', () {
+    test('serializes job search data', () {
+      const request = JobSearchRequest(
+        skills: 'Flutter, AWS',
+        currentLocation: 'Nigeria',
+        targetLocation: 'United Kingdom',
+        experienceLevel: 'Entry Level',
+        includeRemoteJobs: true,
+      );
+
+      final json = request.toJson();
+
+      expect(json['skills'], 'Flutter, AWS');
+
+      expect(json['currentLocation'], 'Nigeria');
+
+      expect(json['targetLocation'], 'United Kingdom');
+
+      expect(json['experienceLevel'], 'Entry Level');
+
+      expect(json['includeRemoteJobs'], isTrue);
+    });
+  });
+
+  group('EarnDee contact message', () {
+    test('builds service request correctly', () {
+      final message = buildEarnDeeContactMessage(
+        name: 'Test Business',
+        service: 'Cloud',
+        description: 'I need help deploying my application.',
+      );
+
+      expect(message, contains('Hello, EarnDee.'));
+
+      expect(message, contains('I will need your Cloud services.'));
+
+      expect(message, contains('Test Business'));
+
+      expect(message, contains('I need help deploying my application.'));
     });
   });
 
