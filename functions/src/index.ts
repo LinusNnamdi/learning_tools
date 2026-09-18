@@ -1,32 +1,55 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+import {setGlobalOptions} from "firebase-functions/v2";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {defineSecret} from "firebase-functions/params";
 
-import {setGlobalOptions} from "firebase-functions";
-// import {onRequest} from "firebase-functions/https";
-// import * as logger from "firebase-functions/logger";
+// -----------------------------------------------------------------------------
+// Global configuration
+// -----------------------------------------------------------------------------
+// These settings apply to all 2nd-generation Firebase Functions
+// defined in this file unless a function overrides them individually.
+setGlobalOptions({
+  region: "africa-south1",
+  maxInstances: 10,
+});
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// -----------------------------------------------------------------------------
+// Secrets
+// -----------------------------------------------------------------------------
+// JOB_SEARCH_API_KEY is stored in Google Cloud Secret Manager.
+// The actual secret value is NOT stored in this source code.
+const jobSearchApiKey = defineSecret("JOB_SEARCH_API_KEY");
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({maxInstances: 10});
+// -----------------------------------------------------------------------------
+// Secure callable function
+// -----------------------------------------------------------------------------
+export const secureBackendTest = onCall(
+  {
+    // Makes JOB_SEARCH_API_KEY available only to this function.
+    secrets: [jobSearchApiKey],
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+    // Rejects requests that don't contain a valid Firebase App Check token.
+    enforceAppCheck: true,
+  },
+  async () => {
+    // Read the secret securely at runtime.
+    const apiKey = jobSearchApiKey.value();
+
+    // Safety check.
+    if (!apiKey) {
+      throw new HttpsError(
+        "internal",
+        "Backend secret is unavailable.",
+      );
+    }
+
+    // IMPORTANT:
+    // Never return apiKey to the Flutter application.
+    // Later, we will use apiKey here on the server to call
+    // the external Job Search API.
+
+    return {
+      success: true,
+      message: "Secure Firebase backend is working.",
+    };
+  },
+);
