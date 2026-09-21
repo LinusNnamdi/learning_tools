@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:366668542659:android:7ca2cc1fbdba49f1152876",
+        "mobilesdk_app_id": "1:366668542659:android:2c9aed43134ecd1c152876",
         "android_client_info": {
-          "package_name": "com.earndeelimited.nfcs"
+          "package_name": "com.earndeeltd.animate"
         }
       },
       "oauth_client": [],

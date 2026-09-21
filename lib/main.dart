@@ -1,5 +1,6 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:learn/courses/course.dart';
 import 'package:learn/firebase_options.dart';
@@ -12,11 +13,14 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await FirebaseAppCheck.instance.activate(
-    // for production
-    providerAndroid: const AndroidPlayIntegrityProvider(),
+    
+    providerAndroid: kReleaseMode
+        ? const AndroidPlayIntegrityProvider()// for production
+        : const AndroidDebugProvider(),// for debugging
+    providerWeb: ReCaptchaEnterpriseProvider(
+      "6LfvicQtAAAAACIFcpNop-nim5arhg223jlp6oEb",
+    ),
 
-    // for debugging
-    // providerAndroid: const AndroidDebugProvider(),
   );
 
   final themeController = ThemeController();

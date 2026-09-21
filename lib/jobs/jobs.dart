@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:learn/common/common.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+//find job
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
 
@@ -857,7 +858,7 @@ class _FindJobsTabState extends State<FindJobsTab> {
                           Icons.auto_awesome_rounded,
                         ),
                         label: const Text(
-                          'Find Jobs With AI',
+                          'Find Jobs',
                         ),
                         style:
                             FilledButton.styleFrom(
@@ -1246,86 +1247,6 @@ bool isSafeJobApplicationUrl(
           uri.host.isNotEmpty;
   }
 }
-
-// class _InfoCard extends StatelessWidget {
-//   final IconData icon;
-//   final String title;
-//   final String description;
-
-//   const _InfoCard({
-//     required this.icon,
-//     required this.title,
-//     required this.description,
-//   });
-
-//   @override
-//   Widget build(BuildContext context) {
-//     final theme = Theme.of(context);
-
-//     return Container(
-//       width: double.infinity,
-//       padding: const EdgeInsets.all(22),
-//       decoration: BoxDecoration(
-//         color: theme.cardColor,
-//         borderRadius: BorderRadius.circular(20),
-//         border: Border.all(color: theme.dividerColor.withValues(alpha: 0.12)),
-//       ),
-//       child: Row(
-//         crossAxisAlignment: CrossAxisAlignment.start,
-//         children: [
-//           Container(
-//             width: 50,
-//             height: 50,
-//             decoration: BoxDecoration(
-//               color: const Color(0xFFF0C75C).withValues(alpha: 0.16),
-//               borderRadius: BorderRadius.circular(15),
-//             ),
-//             child: const Icon(
-//               Icons.lightbulb_outline,
-//               color: Color(0xFFF0C75C),
-//             ),
-//           ),
-
-//           const SizedBox(width: 16),
-
-//           Expanded(
-//             child: Column(
-//               crossAxisAlignment: CrossAxisAlignment.start,
-//               children: [
-//                 Row(
-//                   children: [
-//                     Icon(icon, size: 18, color: const Color(0xFFF0C75C)),
-//                     const SizedBox(width: 7),
-//                     Expanded(
-//                       child: Text(
-//                         title,
-//                         style: theme.textTheme.titleMedium?.copyWith(
-//                           fontWeight: FontWeight.w800,
-//                         ),
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-
-//                 const SizedBox(height: 9),
-
-//                 Text(
-//                   description,
-//                   style: theme.textTheme.bodyMedium?.copyWith(
-//                     height: 1.55,
-//                     color: theme.textTheme.bodyMedium?.color?.withValues(
-//                       alpha: 0.72,
-//                     ),
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
 
 class _ContactTile extends StatelessWidget {
   final IconData icon;

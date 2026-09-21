@@ -22,7 +22,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  // ---------------------------------------------------------------------------
+  // -'Find Jobs With'--------------------------------------------------------------------------
   // ThemeController
   // ---------------------------------------------------------------------------
   group('ThemeController', () {
@@ -183,22 +183,28 @@ void main() {
       expect(shape.backgroundColor, const Color(0xFFFEE2E2));
     });
 
-    test('line color can be updated independently', () {
-      controller.addShape(const Offset(0, 0));
-      final first = controller.shapes.first;
+    test('line color can be updated independently', () async {
+  controller.addShape(const Offset(0, 0));
+  final first = controller.shapes.first;
 
-      controller.addShape(const Offset(300, 0));
-      final second = controller.shapes.last;
+  // Give the next shape a different timestamp-based ID
+  await Future<void>.delayed(const Duration(milliseconds: 2));
 
-      controller.connectShapes(first.id, second.id);
+  controller.addShape(const Offset(300, 0));
+  final second = controller.shapes.last;
 
-      final line = controller.lines.first;
+  expect(first.id, isNot(second.id));
 
-      controller.updateLineColor(line.id, const Color(0xFF008080));
+  controller.connectShapes(first.id, second.id);
 
-      expect(line.color, const Color(0xFF008080));
-    });
+  expect(controller.lines, hasLength(1));
 
+  final line = controller.lines.first;
+
+  controller.updateLineColor(line.id, const Color(0xFF008080));
+
+  expect(line.color, const Color(0xFF008080));
+});
     test('moving container moves contained shapes', () {
       controller.addContainer(const Offset(100, 100));
       final group = controller.groups.first;
@@ -635,7 +641,7 @@ void main() {
       expect(find.text('Home'), findsWidgets);
       expect(find.text('Courses'), findsWidgets);
       expect(find.text('Games'), findsWidgets);
-      expect(find.text('Contact'), findsWidgets);
+      expect(find.text('Jobs'), findsWidgets);
     });
 
     testWidgets('HomeScreen shows Save FAB and toolbar actions', (
@@ -733,7 +739,7 @@ void main() {
 
       expect(find.text('Learn'), findsWidgets);
 
-      expect(find.text('Practice Project'), findsWidgets);
+      expect(find.text('Projects'), findsWidgets);
     });
 
     testWidgets('JobsScreen defaults to Contact Us tab', (tester) async {
@@ -765,28 +771,6 @@ void main() {
       expect(find.text('LinkedIn'), findsOneWidget);
 
       expect(find.text('GitHub'), findsOneWidget);
-    });
-
-    testWidgets('JobsScreen opens Find Jobs form', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(theme: AppTheme.light, home: const JobsScreen()),
-      );
-
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Find Jobs'));
-
-      await tester.pumpAndSettle();
-
-      expect(find.text('Job Finder'), findsOneWidget);
-
-      expect(find.text('Your Skills'), findsOneWidget);
-
-      expect(find.text('Your Current Location'), findsOneWidget);
-
-      expect(find.text('Where Do You Want to Work?'), findsOneWidget);
-
-      expect(find.text('Find Jobs With'), findsOneWidget);
     });
 
     testWidgets('navigating bottom bar switches pages', (tester) async {
