@@ -9,6 +9,285 @@ import 'package:url_launcher/url_launcher.dart';
 
 //isSafeHttp
 
+bool isSafeHttpUrl(String value) {
+  final uri = Uri.tryParse(value);
+
+  if (uri == null) {
+    return false;
+  }
+
+  return uri.scheme == 'https' && uri.host.isNotEmpty;
+}
+
+String? bestJobUrl(JobResult job) {
+  if (isSafeHttpUrl(job.applyUrl)) return job.applyUrl;
+  if (isSafeHttpUrl(job.sourceUrl)) return job.sourceUrl;
+  if (isSafeHttpUrl(job.companyUrl)) return job.companyUrl;
+  return null;
+}
+
+bool isSafeJobApplicationUrl(JobResult job) {
+  final uri = Uri.tryParse(job.applyUrl);
+
+  if (uri == null) {
+    return false;
+  }
+
+  switch (job.applicationMethod) {
+    case JobApplicationMethod.email:
+      return uri.scheme == 'mailto' && uri.path.trim().isNotEmpty;
+
+    case JobApplicationMethod.website:
+    case JobApplicationMethod.linkedin:
+    case JobApplicationMethod.other:
+      return uri.scheme == 'https' && uri.host.isNotEmpty;
+  }
+}
+
+Future<void> showContactMessageForm(
+  BuildContext context, {
+  required ContactChannel channel,
+}) async {
+  final nameController = TextEditingController();
+  final descriptionController = TextEditingController();
+
+  String selectedService = 'Software';
+
+  final formKey = GlobalKey<FormState>();
+
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final channelName = channel == ContactChannel.whatsapp
+                ? 'WhatsApp'
+                : 'Email';
+
+            return AlertDialog(
+              title: Text(
+                'Contact via $channelName',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: nameController,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Your Name / Business',
+                            hintText: 'Enter your name or business name',
+                            prefixIcon: Icon(Icons.person_outline_rounded),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your name or business name.';
+                            }
+
+                            return null;
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedService,
+                          decoration: const InputDecoration(
+                            labelText: 'Service Needed',
+                            prefixIcon: Icon(Icons.design_services_outlined),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'Software',
+                              child: Text('Software'),
+                            ),
+                            DropdownMenuItem(value: 'Web', child: Text('Web')),
+                            DropdownMenuItem(
+                              value: 'Cloud',
+                              child: Text('Cloud'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'DevOps',
+                              child: Text('DevOps'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) return;
+
+                            setDialogState(() {
+                              selectedService = value;
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        TextFormField(
+                          controller: descriptionController,
+                          minLines: 4,
+                          maxLines: 7,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: const InputDecoration(
+                            labelText: 'More Explanation',
+                            alignLabelWithHint: true,
+                            hintText: 'Briefly explain what you want us to build or help you with...',
+                            prefixIcon: Padding(
+                              padding: EdgeInsets.only(bottom: 75),
+                              child: Icon(Icons.description_outlined),
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please provide a short description.';
+                            }
+
+                            if (value.trim().length < 10) {
+                              return 'Please provide a little more detail.';
+                            }
+
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('Cancel'),
+                ),
+
+                FilledButton.icon(
+                  onPressed: () async {
+                    final valid = formKey.currentState?.validate() ?? false;
+
+                    if (!valid) return;
+
+                    final message = buildEarnDeeContactMessage(
+                      name: nameController.text,
+                      service: selectedService,
+                      description: descriptionController.text,
+                    );
+
+                    Navigator.pop(dialogContext);
+
+                    if (!context.mounted) return;
+
+                    switch (channel) {
+                      case ContactChannel.whatsapp:
+                        await sendEarnDeeWhatsAppMessage(context, message);
+                        break;
+
+                      case ContactChannel.email:
+                        await sendEarnDeeEmail(context, message);
+                        break;
+                    }
+                  },
+                  icon: Icon(
+                    channel == ContactChannel.whatsapp
+                        ? Icons.send_rounded
+                        : Icons.email_outlined,
+                  ),
+                  label: Text(
+                    channel == ContactChannel.whatsapp
+                        ? 'Continue to WhatsApp'
+                        : 'Continue to Email',
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  } finally {
+    nameController.dispose();
+    descriptionController.dispose();
+  }
+}
+
+String buildEarnDeeContactMessage({
+  required String name,
+  required String service,
+  required String description,
+}) {
+  final cleanName = name.trim();
+  final cleanService = service.trim();
+  final cleanDescription = description.trim();
+
+  return '''
+Hello, EarnDee.
+
+I will need your $cleanService services.
+
+Name / Business: $cleanName
+
+More explanation:
+$cleanDescription
+'''
+      .trim();
+}
+
+Future<void> sendEarnDeeWhatsAppMessage(
+  BuildContext context,
+  String message,
+) async {
+  const phone = ContactUsTab.whatsappInternationalNumber;
+
+  final uri = Uri.https('wa.me', '/$phone', {'text': message});
+
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Unable to open WhatsApp.')));
+  }
+}
+
+Future<void> sendEarnDeeEmail(BuildContext context, String message) async {
+  const recipient = ContactUsTab.contactEmail;
+
+  if (recipient.trim().isEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('EarnDee email address has not been configured yet.'),
+        ),
+      );
+    }
+
+    return;
+  }
+
+  final uri = Uri(
+    scheme: 'mailto',
+    path: recipient,
+    queryParameters: {'subject': 'EarnDee Service Request', 'body': message},
+  );
+
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Unable to open your email application.')),
+    );
+  }
+}
+
 class GeminiJobService {
   const GeminiJobService();
 
@@ -508,250 +787,6 @@ class ContactUsTab extends StatelessWidget {
 }
 
 enum ContactChannel { whatsapp, email }
-
-Future<void> showContactMessageForm(
-  BuildContext context, {
-  required ContactChannel channel,
-}) async {
-  final nameController = TextEditingController();
-  final descriptionController = TextEditingController();
-
-  String selectedService = 'Software';
-
-  final formKey = GlobalKey<FormState>();
-
-  try {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final channelName = channel == ContactChannel.whatsapp
-                ? 'WhatsApp'
-                : 'Email';
-
-            return AlertDialog(
-              title: Text(
-                'Contact via $channelName',
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-
-              content: SizedBox(
-                width: 520,
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextFormField(
-                          controller: nameController,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Your Name / Business',
-                            hintText: 'Enter your name or business name',
-                            prefixIcon: Icon(Icons.person_outline_rounded),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Please enter your name or business name.';
-                            }
-
-                            return null;
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        DropdownButtonFormField<String>(
-                          initialValue: selectedService,
-                          decoration: const InputDecoration(
-                            labelText: 'Service Needed',
-                            prefixIcon: Icon(Icons.design_services_outlined),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'Software',
-                              child: Text('Software'),
-                            ),
-                            DropdownMenuItem(value: 'Web', child: Text('Web')),
-                            DropdownMenuItem(
-                              value: 'Cloud',
-                              child: Text('Cloud'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'DevOps',
-                              child: Text('DevOps'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value == null) return;
-
-                            setDialogState(() {
-                              selectedService = value;
-                            });
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        TextFormField(
-                          controller: descriptionController,
-                          minLines: 4,
-                          maxLines: 7,
-                          textCapitalization: TextCapitalization.sentences,
-                          decoration: const InputDecoration(
-                            labelText: 'More Explanation',
-                            alignLabelWithHint: true,
-                            hintText: 'Briefly explain what you want us to build or help you with...',
-                            prefixIcon: Padding(
-                              padding: EdgeInsets.only(bottom: 75),
-                              child: Icon(Icons.description_outlined),
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Please provide a short description.';
-                            }
-
-                            if (value.trim().length < 10) {
-                              return 'Please provide a little more detail.';
-                            }
-
-                            return null;
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('Cancel'),
-                ),
-
-                FilledButton.icon(
-                  onPressed: () async {
-                    final valid = formKey.currentState?.validate() ?? false;
-
-                    if (!valid) return;
-
-                    final message = buildEarnDeeContactMessage(
-                      name: nameController.text,
-                      service: selectedService,
-                      description: descriptionController.text,
-                    );
-
-                    Navigator.pop(dialogContext);
-
-                    if (!context.mounted) return;
-
-                    switch (channel) {
-                      case ContactChannel.whatsapp:
-                        await sendEarnDeeWhatsAppMessage(context, message);
-                        break;
-
-                      case ContactChannel.email:
-                        await sendEarnDeeEmail(context, message);
-                        break;
-                    }
-                  },
-                  icon: Icon(
-                    channel == ContactChannel.whatsapp
-                        ? Icons.send_rounded
-                        : Icons.email_outlined,
-                  ),
-                  label: Text(
-                    channel == ContactChannel.whatsapp
-                        ? 'Continue to WhatsApp'
-                        : 'Continue to Email',
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  } finally {
-    nameController.dispose();
-    descriptionController.dispose();
-  }
-}
-
-String buildEarnDeeContactMessage({
-  required String name,
-  required String service,
-  required String description,
-}) {
-  final cleanName = name.trim();
-  final cleanService = service.trim();
-  final cleanDescription = description.trim();
-
-  return '''
-Hello, EarnDee.
-
-I will need your $cleanService services.
-
-Name / Business: $cleanName
-
-More explanation:
-$cleanDescription
-'''
-      .trim();
-}
-
-Future<void> sendEarnDeeWhatsAppMessage(
-  BuildContext context,
-  String message,
-) async {
-  const phone = ContactUsTab.whatsappInternationalNumber;
-
-  final uri = Uri.https('wa.me', '/$phone', {'text': message});
-
-  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-
-  if (!opened && context.mounted) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Unable to open WhatsApp.')));
-  }
-}
-
-Future<void> sendEarnDeeEmail(BuildContext context, String message) async {
-  const recipient = ContactUsTab.contactEmail;
-
-  if (recipient.trim().isEmpty) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('EarnDee email address has not been configured yet.'),
-        ),
-      );
-    }
-
-    return;
-  }
-
-  final uri = Uri(
-    scheme: 'mailto',
-    path: recipient,
-    queryParameters: {'subject': 'EarnDee Service Request', 'body': message},
-  );
-
-  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-
-  if (!opened && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Unable to open your email application.')),
-    );
-  }
-}
 
 class FindJobsTab extends StatefulWidget {
   const FindJobsTab({super.key});
@@ -1655,41 +1690,6 @@ class JobSearchResponse {
       summary: (json['summary'] as String?)?.trim() ?? '',
       searchedAt: (json['searched_at'] as String?)?.trim() ?? '',
     );
-  }
-}
-
-bool isSafeHttpUrl(String value) {
-  final uri = Uri.tryParse(value);
-
-  if (uri == null) {
-    return false;
-  }
-
-  return uri.scheme == 'https' && uri.host.isNotEmpty;
-}
-
-String? bestJobUrl(JobResult job) {
-  if (isSafeHttpUrl(job.applyUrl)) return job.applyUrl;
-  if (isSafeHttpUrl(job.sourceUrl)) return job.sourceUrl;
-  if (isSafeHttpUrl(job.companyUrl)) return job.companyUrl;
-  return null;
-}
-
-bool isSafeJobApplicationUrl(JobResult job) {
-  final uri = Uri.tryParse(job.applyUrl);
-
-  if (uri == null) {
-    return false;
-  }
-
-  switch (job.applicationMethod) {
-    case JobApplicationMethod.email:
-      return uri.scheme == 'mailto' && uri.path.trim().isNotEmpty;
-
-    case JobApplicationMethod.website:
-    case JobApplicationMethod.linkedin:
-    case JobApplicationMethod.other:
-      return uri.scheme == 'https' && uri.host.isNotEmpty;
   }
 }
 

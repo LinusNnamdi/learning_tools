@@ -77,8 +77,8 @@ export const searchJobsWithGemini = onCall(
     // -------------------------------------------------
     // Model + retry settings
     // -------------------------------------------------
-    const model = "gemini-3.6-flash";   // ← current model (required for new users)
-    const maxAttempts = 4;
+    const model = "gemini-3.6-flash";
+    const maxAttempts = 3;
 
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/` +
