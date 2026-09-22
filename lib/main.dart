@@ -22,7 +22,9 @@ Future<void> main() async {
     ),
   );
 
-  await AdsService.instance.initialize();
+  if (!kIsWeb) {
+    await AdsService.instance.initialize();
+  }
 
   final themeController = ThemeController();
 

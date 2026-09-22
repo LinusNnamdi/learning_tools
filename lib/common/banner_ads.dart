@@ -120,8 +120,8 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
     _bannerAd = BannerAd(
       size: adaptiveSize,
-      // adUnitId: 'ca-app-pub-3940256099942544/6300978111', //Test ID
-      adUnitId: 'ca-app-pub-7018091756479171/1374187926', // Real ID
+      adUnitId: 'ca-app-pub-3940256099942544/6300978111', //Test ID
+      // adUnitId: 'ca-app-pub-7018091756479171/1374187926', // Real ID
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
