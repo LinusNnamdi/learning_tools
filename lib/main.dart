@@ -2,6 +2,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:learn/common/reward_ads.dart';
 import 'package:learn/courses/course.dart';
 import 'package:learn/firebase_options.dart';
 import 'package:learn/home.dart';
@@ -13,15 +14,15 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await FirebaseAppCheck.instance.activate(
-    
     providerAndroid: kReleaseMode
-        ? const AndroidPlayIntegrityProvider()// for production
-        : const AndroidDebugProvider(),// for debugging
+        ? const AndroidPlayIntegrityProvider() // for production
+        : const AndroidDebugProvider(), // for debugging
     providerWeb: ReCaptchaEnterpriseProvider(
       "6LfvicQtAAAAACIFcpNop-nim5arhg223jlp6oEb",
     ),
-
   );
+
+  await AdsService.instance.initialize();
 
   final themeController = ThemeController();
 
@@ -44,3 +45,10 @@ Future<void> main() async {
     ),
   );
 }
+
+// flutter clean
+// flutter pub get
+// flutter analyze
+// flutter test
+// flutter build web
+// flutter build apk --release

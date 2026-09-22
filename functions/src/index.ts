@@ -10,33 +10,12 @@ setGlobalOptions({
 const jobSearchApiKey = defineSecret("JOB_SEARCH_API_KEY");
 
 // -----------------------------------------------------------------------------
-// 1. Security test
-// -----------------------------------------------------------------------------
-
-export const secureBackendTest = onCall(
-  {
-    secrets: [jobSearchApiKey],
-    enforceAppCheck: true,
-  },
-  async () => {
-    const apiKey = jobSearchApiKey.value();
-
-    if (!apiKey) {
-      throw new HttpsError(
-        "internal",
-        "Backend secret is unavailable.",
-      );
-    }
-
-    return {
-      success: true,
-      message: "App Check and Secret Manager are working.",
-    };
-  },
-);
-
-// -----------------------------------------------------------------------------
-// 2. Gemini bridge for Job Finder
+// cd functions
+// npm run build 
+// cd ..
+// firebase deploy --only functions:searchJobsWithGemini
+//
+// 1. Gemini bridge for Job Finder
 // -----------------------------------------------------------------------------
 
 export const searchJobsWithGemini = onCall(
@@ -44,7 +23,7 @@ export const searchJobsWithGemini = onCall(
     secrets: [jobSearchApiKey],
     enforceAppCheck: true,
     timeoutSeconds: 120,
-    memory: "256MiB",
+    memory: "512MiB", // slightly higher – search can take more memory
   },
   async (request) => {
     const apiKey = jobSearchApiKey.value();
@@ -106,9 +85,17 @@ export const searchJobsWithGemini = onCall(
                 ],
               },
             ],
+            // Real web search
+            tools: [
+              {
+                google_search: {},
+              },
+            ],
             generationConfig: {
               temperature: 0.2,
-              responseMimeType: "application/json",
+              // REMOVED: responseMimeType: "application/json"
+              // JSON mode + google_search often produces empty parts
+              maxOutputTokens: 8192,
             },
           }),
         });
@@ -124,49 +111,62 @@ export const searchJobsWithGemini = onCall(
           try {
             geminiResponse = JSON.parse(responseBody);
           } catch (error) {
-            console.error(
-              "Unable to parse Gemini HTTP response:",
-              error,
-            );
+            console.error("Unable to parse Gemini HTTP response:", error);
             throw new HttpsError(
               "internal",
               "Gemini returned an invalid API response.",
             );
           }
 
-          const parts =
-            geminiResponse?.candidates?.[0]?.content?.parts;
+          // Better diagnostics
+          console.log("Gemini raw response summary:", {
+            candidatesCount: geminiResponse?.candidates?.length ?? 0,
+            finishReason: geminiResponse?.candidates?.[0]?.finishReason,
+            promptFeedback: geminiResponse?.promptFeedback,
+            hasGrounding: !!geminiResponse?.candidates?.[0]?.groundingMetadata,
+            webSearchQueries:
+              geminiResponse?.candidates?.[0]?.groundingMetadata?.webSearchQueries,
+          });
+
+          const candidate = geminiResponse?.candidates?.[0];
+          const parts = candidate?.content?.parts;
 
           if (!Array.isArray(parts) || parts.length === 0) {
             console.error(
-              "Gemini returned no usable content.",
+              "Gemini returned no usable content. Full response:",
               JSON.stringify(geminiResponse),
             );
+
+            const finishReason = candidate?.finishReason ?? "unknown";
+            const blockReason =
+              geminiResponse?.promptFeedback?.blockReason ?? null;
+
             throw new HttpsError(
               "internal",
-              "Gemini returned no usable content.",
+              `Gemini returned no usable content (finishReason: ${finishReason}` +
+              (blockReason ? `, blockReason: ${blockReason}` : "") +
+              ").",
             );
           }
 
           const text = parts
             .map((part: any) => {
-              return typeof part?.text === "string"
-                ? part.text
-                : "";
+              return typeof part?.text === "string" ? part.text : "";
             })
             .join("")
             .trim();
 
           if (!text) {
+            console.error(
+              "Gemini returned empty text parts. Full response:",
+              JSON.stringify(geminiResponse),
+            );
             throw new HttpsError(
               "internal",
               "Gemini returned an empty response.",
             );
           }
 
-          // IMPORTANT:
-          // Do NOT JSON.parse Gemini's generated text here.
-          // Flutter will clean / extract / validate it.
           return {
             success: true,
             rawText: text,

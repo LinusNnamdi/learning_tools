@@ -1,13 +1,16 @@
 import 'dart:convert';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:learn/common/banner_ads.dart';
 import 'package:learn/common/common.dart';
+import 'package:learn/common/reward_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-//isSafeHttp
+//prepareJobsearch
 
 bool isSafeHttpUrl(String value) {
   final uri = Uri.tryParse(value);
@@ -16,7 +19,7 @@ bool isSafeHttpUrl(String value) {
     return false;
   }
 
-  return uri.scheme == 'https' && uri.host.isNotEmpty;
+  return (uri.scheme == 'https' || uri.scheme == 'http') && uri.host.isNotEmpty;
 }
 
 String? bestJobUrl(JobResult job) {
@@ -40,7 +43,8 @@ bool isSafeJobApplicationUrl(JobResult job) {
     case JobApplicationMethod.website:
     case JobApplicationMethod.linkedin:
     case JobApplicationMethod.other:
-      return uri.scheme == 'https' && uri.host.isNotEmpty;
+      return (uri.scheme == 'https' || uri.scheme == 'http') &&
+          uri.host.isNotEmpty;
   }
 }
 
@@ -343,7 +347,6 @@ class JobResponseAnalyzer {
 
   static void _normalizeResponse(Map<String, dynamic> json) {
     json['summary'] = _stringValue(json['summary']);
-
     json['searched_at'] = _stringValue(json['searched_at']);
 
     final rawJobs = json['jobs'];
@@ -365,12 +368,10 @@ class JobResponseAnalyzer {
       final job = Map<String, dynamic>.from(item);
 
       final title = _stringValue(job['job_title']);
-
       final company = _stringValue(job['company_name']);
 
-      // A result without these two fields is not useful
-      // enough to become a job card.
-      if (title.isEmpty || company.isEmpty) {
+      // Skip completely useless entries
+      if (title.isEmpty && company.isEmpty) {
         continue;
       }
 
@@ -380,29 +381,20 @@ class JobResponseAnalyzer {
       );
 
       job['job_title'] = title;
-
       job['company_name'] = company;
-
       job['job_location'] = _stringValue(job['job_location']);
-
       job['work_mode'] = _stringValue(job['work_mode']);
-
       job['employment_type'] = _stringValue(job['employment_type']);
-
       job['posted_at'] = _stringValue(job['posted_at']);
-
       job['application_deadline'] = _stringValue(job['application_deadline']);
-
       job['short_description'] = _stringValue(job['short_description']);
 
+      // Safe URL handling – empty string is allowed
       job['company_url'] = _safeUrl(job['company_url']);
-
       job['apply_url'] = _safeUrl(job['apply_url']);
-
       job['source_url'] = _safeUrl(job['source_url']);
 
       job['application_method'] = _applicationMethod(job['application_method']);
-
       job['requirements'] = _requirements(job['requirements']);
 
       normalizedJobs.add(job);
@@ -417,7 +409,6 @@ class JobResponseAnalyzer {
     }
 
     final text = value.toString().trim();
-
     return text.isEmpty ? fallback : text;
   }
 
@@ -438,7 +429,7 @@ class JobResponseAnalyzer {
 
     const allowed = {'website', 'email', 'linkedin', 'other'};
 
-    return allowed.contains(method) ? method : 'other';
+    return allowed.contains(method) ? method : '';
   }
 
   static String _safeUrl(dynamic value) {
@@ -454,6 +445,7 @@ class JobResponseAnalyzer {
       return '';
     }
 
+    // Only allow safe http/https URLs
     if (uri.scheme != 'https' && uri.scheme != 'http') {
       return '';
     }
@@ -575,12 +567,12 @@ class ContactUsTab extends StatelessWidget {
   static const String whatsappInternationalNumber = '2348148478414';
 
   // TODO: Replace when you provide the real email.
-  static const String contactEmail = '';
+  static const String contactEmail = 'earndeelimitedcompany@gmail.com';
 
   // TODO: Replace with your real social profile URLs.
-  static const String tiktokUrl = '';
-  static const String linkedInUrl = '';
-  static const String githubUrl = '';
+  static const String tiktokUrl = 'https://www.tiktok.com/@001_tech_wizard?_r=1&_t=ZS-98KTK1rBgjX';
+  static const String linkedInUrl = 'https://www.linkedin.com/in/linus-okolo/';
+  static const String githubUrl = 'https://github.com/LinusNnamdi/';
 
   @override
   Widget build(BuildContext context) {
@@ -788,6 +780,77 @@ class ContactUsTab extends StatelessWidget {
 
 enum ContactChannel { whatsapp, email }
 
+class _ContactTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+  final VoidCallback onTap;
+
+  const _ContactTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(17),
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(17),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0C75C).withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: const Color(0xFFF0C75C)),
+            ),
+
+            const SizedBox(width: 14),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    value,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class FindJobsTab extends StatefulWidget {
   const FindJobsTab({super.key});
 
@@ -797,26 +860,41 @@ class FindJobsTab extends StatefulWidget {
 
 class _FindJobsTabState extends State<FindJobsTab> {
   bool _isSearching = false;
-
   String? _searchError;
-
   JobSearchResponse? _searchResponse;
   final _formKey = GlobalKey<FormState>();
 
   final _skillsController = TextEditingController();
   final _currentLocationController = TextEditingController();
   final _targetLocationController = TextEditingController();
+final String kAndroidApkDownloadUrl =
+    'https://github.com/LinusNnamdi/learning_tools/actions/runs/35731611486/artifacts/10695318929';
 
   String _experienceLevel = 'Entry Level';
-
   bool _includeRemoteJobs = true;
+
+  // ★ Controls the disclaimer → BannerAd switch
+  bool _showBannerAd = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // After 3 seconds replace the disclaimer with the ad
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _showBannerAd = true;
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
     _skillsController.dispose();
     _currentLocationController.dispose();
     _targetLocationController.dispose();
-
     super.dispose();
   }
 
@@ -833,240 +911,328 @@ class _FindJobsTabState extends State<FindJobsTab> {
           label: const Text('Saved Jobs'),
           onPressed: () => _showSavedJobs(context),
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 850),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 10),
-
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFFF0C75C).withValues(alpha: 0.20),
-                          theme.colorScheme.surface,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: const Color(0xFFF0C75C).withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0C75C),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: const Icon(
-                            Icons.search_rounded,
-                            size: 32,
-                            color: Color(0xFF111827),
+        // ★★★ Layout change: fixed top + scrollable form ★★★
+        body: Column(
+          children: [
+            // ========== FIXED (non-scrollable) BANNER AREA ==========
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                child: _showBannerAd
+                    ? const BannerAdWidget() // ← your ad widget
+                    : Container(
+                        key: const ValueKey('disclaimer'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: theme.dividerColor.withValues(alpha: 0.15),
                           ),
                         ),
-
-                        const SizedBox(width: 18),
-
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Job Finder',
-                                style: theme.textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-
-                              const SizedBox(height: 6),
-
-                              Text(
-                                'Tell us your skills, current location and where '
-                                'you want to work. The job engine will use this '
-                                'information to find and rank suitable opportunities.',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  height: 1.5,
-                                ),
-                              ),
-                            ],
+                        child: Text(
+                          'More Information | better result.\n'
+                          'Although, we ensure secure outputs. '
+                          'EarnDee Limited is not liable for damages, '
+                          'do your research.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.25,
+                            fontStyle: FontStyle.italic,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+              ),
+            ),
 
-                  const SizedBox(height: 24),
-
-                  Form(
-                    key: _formKey,
+            // ========== SCROLLABLE FORM ==========
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 850),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextFormField(
-                          controller: _skillsController,
-                          minLines: 2,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            labelText: 'Your Skills',
-                            hintText: 'Flutter, AWS, Docker, GitHub Actions...',
-                            prefixIcon: Icon(Icons.psychology_outlined),
-                          ),
-                          validator: _requiredField,
-                        ),
+                        // Header card
+                        // Container(
+                        //   padding: const EdgeInsets.all(24),
+                        //   decoration: BoxDecoration(
+                        //     gradient: LinearGradient(
+                        //       colors: [
+                        //         const Color(0xFFF0C75C).withValues(alpha: 0.20),
+                        //         theme.colorScheme.surface,
+                        //       ],
+                        //     ),
+                        //     borderRadius: BorderRadius.circular(24),
+                        //     border: Border.all(
+                        //       color: const Color(0xFFF0C75C)
+                        //           .withValues(alpha: 0.35),
+                        //     ),
+                        //   ),
+                        //   child: Row(
+                        //     crossAxisAlignment: CrossAxisAlignment.start,
+                        //     children: [
+                        //       Container(
+                        //         width: 64,
+                        //         height: 64,
+                        //         decoration: BoxDecoration(
+                        //           color: const Color(0xFFF0C75C),
+                        //           borderRadius: BorderRadius.circular(18),
+                        //         ),
+                        //         child: const Icon(
+                        //           Icons.search_rounded,
+                        //           size: 32,
+                        //           color: Color(0xFF111827),
+                        //         ),
+                        //       ),
+                        //       const SizedBox(width: 18),
+                        //       Expanded(
+                        //         child: Column(
+                        //           crossAxisAlignment: CrossAxisAlignment.start,
+                        //           children: [
+                        //             Text(
+                        //               'Job Finder',
+                        //               style: theme.textTheme.titleLarge
+                        //                   ?.copyWith(
+                        //                 fontWeight: FontWeight.w900,
+                        //               ),
+                        //             ),
+                        //             const SizedBox(height: 6),
+                        //             Text(
+                        //               'Tell us your skills, current location and where '
+                        //               'you want to work. The job engine will use this '
+                        //               'information to find and rank suitable opportunities.',
+                        //               style: theme.textTheme.bodyMedium
+                        //                   ?.copyWith(height: 1.5),
+                        //             ),
+                        //           ],
+                        //         ),
+                        //       ),
+                        //     ],
+                        //   ),
+                        // ),
 
-                        const SizedBox(height: 16),
+                        // const SizedBox(height: 24),
 
-                        TextFormField(
-                          controller: _currentLocationController,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Your Current Location',
-                            hintText: 'Country, state or city',
-                            prefixIcon: Icon(Icons.location_on_outlined),
-                          ),
-                          validator: _requiredField,
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        TextFormField(
-                          controller: _targetLocationController,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Where Do You Want to Work?',
-                            hintText: 'Country, state, city or Remote',
-                            prefixIcon: Icon(Icons.travel_explore_rounded),
-                          ),
-                          validator: _requiredField,
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        DropdownButtonFormField<String>(
-                          initialValue: _experienceLevel,
-                          decoration: const InputDecoration(
-                            labelText: 'Experience Level',
-                            prefixIcon: Icon(Icons.stairs_outlined),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'Entry Level',
-                              child: Text('Entry Level'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Junior',
-                              child: Text('Junior'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Mid Level',
-                              child: Text('Mid Level'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Senior',
-                              child: Text('Senior'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Any Level',
-                              child: Text('Any Level'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value == null) return;
-
-                            setState(() {
-                              _experienceLevel = value;
-                            });
-                          },
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        SwitchListTile.adaptive(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Include remote jobs'),
-                          subtitle: const Text(
-                            'Also consider jobs that can be performed remotely.',
-                          ),
-                          value: _includeRemoteJobs,
-                          onChanged: (value) {
-                            setState(() {
-                              _includeRemoteJobs = value;
-                            });
-                          },
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        FilledButton.icon(
-                          onPressed: _isSearching ? null : _prepareJobSearch,
-                          icon: _isSearching
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
+                        // Form
+                        Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              TextFormField(
+                                controller: _skillsController,
+                                minLines: 2,
+                                maxLines: 4,
+                                decoration: const InputDecoration(
+                                  labelText: 'Your Skills',
+                                  hintText:
+                                      'Java, Plumber, Driver, GitHub Actions...',
+                                  prefixIcon:
+                                      Icon(Icons.psychology_outlined),
+                                ),
+                                validator: _requiredField,
+                              ),
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: _currentLocationController,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  labelText: 'Your Current Location',
+                                  hintText: 'Country, state or city',
+                                  prefixIcon:
+                                      Icon(Icons.location_on_outlined),
+                                ),
+                                validator: _requiredField,
+                              ),
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: _targetLocationController,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  labelText: 'Where Do You Want to Work?',
+                                  hintText:
+                                      'Country, state, city or Remote',
+                                  prefixIcon:
+                                      Icon(Icons.travel_explore_rounded),
+                                ),
+                                validator: _requiredField,
+                              ),
+                              const SizedBox(height: 16),
+                              DropdownButtonFormField<String>(
+                                initialValue: _experienceLevel,
+                                decoration: const InputDecoration(
+                                  labelText: 'Experience Level',
+                                  prefixIcon: Icon(Icons.stairs_outlined),
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'Entry Level',
+                                    child: Text('Entry Level'),
                                   ),
-                                )
-                              : const Icon(Icons.auto_awesome_rounded),
-                          label: Text(
-                            _isSearching
-                                ? 'Searching Jobs...'
-                                : 'Find Jobs With AI',
-                          ),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFFF0C75C),
-                            foregroundColor: const Color(0xFF111827),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                                  DropdownMenuItem(
+                                    value: 'Junior',
+                                    child: Text('Junior'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'Mid Level',
+                                    child: Text('Mid Level'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'Senior',
+                                    child: Text('Senior'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'Any Level',
+                                    child: Text('Any Level'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  setState(() {
+                                    _experienceLevel = value;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              SwitchListTile.adaptive(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Include remote jobs'),
+                                subtitle: const Text(
+                                  'Also consider jobs that can be performed remotely.',
+                                ),
+                                value: _includeRemoteJobs,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _includeRemoteJobs = value;
+                                  });
+                                },
+                              ),
+                              // …… inside the Form, after the SwitchListTile ……
+
+const SizedBox(height: 20),
+
+// ────────────────────────────────────────────────
+// MOBILE → normal AI search button
+// WEB    → disabled button + Download app button
+// ────────────────────────────────────────────────
+if (kIsWeb) ...[
+  // Disabled “Find Jobs With AI”
+  FilledButton.icon(
+    onPressed: null, // always disabled on web
+    icon: const Icon(Icons.auto_awesome_rounded),
+    label: const Text('Find Jobs With AI'),
+    style: FilledButton.styleFrom(
+      backgroundColor: const Color(0xFFF0C75C).withValues(alpha: 0.45),
+      foregroundColor: const Color(0xFF111827).withValues(alpha: 0.55),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+    ),
+  ),
+
+  const SizedBox(height: 14),
+
+  // Download app button
+  OutlinedButton.icon(
+    onPressed: () async {
+      final uri = Uri.parse(kAndroidApkDownloadUrl);
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open the download link.'),
+          ),
+        );
+      }
+    },
+    icon: const Icon(Icons.download_rounded),
+    label: const Text('Download app to continue'),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: const Color(0xFF111827),
+      side: const BorderSide(color: Color(0xFFF0C75C), width: 1.8),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+    ),
+  ),
+
+  const SizedBox(height: 12),
+
+  Text(
+    'AI job search uses paid API calls and is only available in the Android app (with rewarded ads). '
+    'Download the free APK to unlock it.',
+    textAlign: TextAlign.center,
+    style: theme.textTheme.bodySmall?.copyWith(
+      height: 1.45,
+      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.70),
+    ),
+  ),
+] else ...[
+  // Original mobile button
+  FilledButton.icon(
+    onPressed: _isSearching ? null : _prepareJobSearch,
+    icon: _isSearching
+        ? const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          )
+        : const Icon(Icons.auto_awesome_rounded),
+    label: Text(
+      _isSearching ? 'Searching Jobs...' : 'Find Jobs',
+    ),
+    style: FilledButton.styleFrom(
+      backgroundColor: const Color(0xFFF0C75C),
+      foregroundColor: const Color(0xFF111827),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+    ),
+  ),
+
+  const SizedBox(height: 14),
+                              Text(
+                                'Ads help to monitor and secure info',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  height: 1.45,
+                                  color: theme.textTheme.bodySmall?.color
+                                      ?.withValues(alpha: 0.70),
+                                ),
+                              ),
+],
+                              
+                              if (_searchError != null) ...[
+                                const SizedBox(height: 24),
+                                _JobSearchErrorCard(message: _searchError!),
+                              ],
+                              if (_searchResponse != null) ...[
+                                const SizedBox(height: 30),
+                                JobSearchResultsSection(
+                                    response: _searchResponse!),
+                              ],
+                              BannerAdWidget(),
+                            ],
                           ),
                         ),
-
-                        const SizedBox(height: 14),
-
-                        Text(
-                          'EarnDee Ai-powered job search protected by '
-                          'Firebase App Check and Other security measures!',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            height: 1.45,
-                            color: theme.textTheme.bodySmall?.color?.withValues(
-                              alpha: 0.70,
-                            ),
-                          ),
-                        ),
-                        if (_searchError != null) ...[
-                          const SizedBox(height: 24),
-
-                          _JobSearchErrorCard(message: _searchError!),
-                        ],
-
-                        if (_searchResponse != null) ...[
-                          const SizedBox(height: 30),
-
-                          JobSearchResultsSection(response: _searchResponse!),
-                        ],
+                        const SizedBox(height: 30),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 30),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
+  // ---------- existing helpers stay the same ----------
   void _showSavedJobs(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -1082,16 +1248,12 @@ class _FindJobsTabState extends State<FindJobsTab> {
     if (value == null || value.trim().isEmpty) {
       return 'This field is required.';
     }
-
     return null;
   }
 
   Future<void> _prepareJobSearch() async {
     final valid = _formKey.currentState?.validate() ?? false;
-
-    if (!valid || _isSearching) {
-      return;
-    }
+    if (!valid || _isSearching) return;
 
     final request = JobSearchRequest(
       skills: _skillsController.text.trim(),
@@ -1109,49 +1271,32 @@ class _FindJobsTabState extends State<FindJobsTab> {
 
     try {
       const service = GeminiJobService();
-
       final rawResponse = await service.generateJobSearch(
         prompt: request.toGeminiPrompt(),
       );
-
       final analyzedResponse = JobResponseAnalyzer.analyze(rawResponse);
 
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       setState(() {
         _searchResponse = analyzedResponse;
       });
     } on FirebaseFunctionsException catch (error) {
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       setState(() {
         _searchError = _firebaseErrorMessage(error);
       });
     } on FormatException catch (error) {
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       setState(() {
         _searchError =
-            'The AI returned an invalid job response. '
-            '${error.message}';
+            'The AI returned an invalid job response. ${error.message}';
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       setState(() {
         _searchError =
-            'Unable to search for jobs right now. '
-            'Please try again.';
+            'Unable to search for jobs right now. Please try again.';
       });
-
       debugPrint('Job search error: $error');
     } finally {
       if (mounted) {
@@ -1166,28 +1311,21 @@ class _FindJobsTabState extends State<FindJobsTab> {
     switch (error.code) {
       case 'invalid-argument':
         return error.message ?? 'The job search request is invalid.';
-
       case 'unauthenticated':
         return 'The application could not be verified. '
             'Check Firebase App Check configuration.';
-
       case 'permission-denied':
         return 'The job-search service rejected this request.';
-
       case 'resource-exhausted':
         return 'The job-search service is temporarily busy. '
             'Please try again shortly.';
-
       case 'deadline-exceeded':
-        return 'The AI took too long to respond. '
-            'Please try again.';
-
+        return 'The AI took too long to respond. Please try again.';
       case 'unavailable':
         return 'The job-search service is temporarily unavailable.';
-
       case 'internal':
-        return error.message ?? 'The AI service encountered an internal error.';
-
+        return error.message ??
+            'The AI service encountered an internal error.';
       default:
         return error.message ?? 'Unable to complete the job search.';
     }
@@ -1312,6 +1450,7 @@ class JobSearchResultsSection extends StatelessWidget {
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
         ],
+        BannerAdWidget(),
 
         const SizedBox(height: 20),
 
@@ -1353,7 +1492,117 @@ class _JobResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // …… keep all your existing header / location / description / requirements UI ……
+          
+          // ---------- TITLE + COMPANY ----------
+          if (job.jobTitle.isNotEmpty)
+            Text(
+              job.jobTitle,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                height: 1.25,
+              ),
+            ),
+
+          if (job.companyName.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              job.companyName,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ],
+
+          // ---------- LOCATION / MODE / TYPE ----------
+          if (job.jobLocation.isNotEmpty ||
+              job.workMode.isNotEmpty ||
+              job.employmentType.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (job.jobLocation.isNotEmpty)
+                  _InfoChip(
+                    icon: Icons.location_on_outlined,
+                    label: job.jobLocation,
+                  ),
+                if (job.workMode.isNotEmpty)
+                  _InfoChip(
+                    icon: Icons.laptop_mac_outlined,
+                    label: job.workMode,
+                  ),
+                if (job.employmentType.isNotEmpty)
+                  _InfoChip(
+                    icon: Icons.work_outline_rounded,
+                    label: job.employmentType,
+                  ),
+              ],
+            ),
+          ],
+
+          // ---------- SHORT DESCRIPTION ----------
+          if (job.shortDescription.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              job.shortDescription,
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
+            ),
+          ],
+
+          // ---------- REQUIREMENTS ----------
+          if (job.requirements.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Requirements',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...job.requirements.map(
+              (req) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('•  ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: Text(
+                        req,
+                        style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          // ---------- POSTED / DEADLINE (optional) ----------
+          if (job.postedAt.isNotEmpty || job.applicationDeadline.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 16,
+              children: [
+                if (job.postedAt.isNotEmpty)
+                  Text(
+                    'Posted: ${job.postedAt}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                    ),
+                  ),
+                if (job.applicationDeadline.isNotEmpty)
+                  Text(
+                    'Deadline: ${job.applicationDeadline}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                    ),
+                  ),
+              ],
+            ),
+          ],
 
           const SizedBox(height: 20),
 
@@ -1363,7 +1612,9 @@ class _JobResultCard extends StatelessWidget {
               // Visit / Apply
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: url == null ? null : () => _openUrl(context, url),
+                  onPressed: url == null
+                      ? null
+                      : () => _onVisitOrCopy(context, url, isCopy: false),
                   icon: const Icon(Icons.open_in_new_rounded, size: 18),
                   label: const Text('Visit page'),
                   style: FilledButton.styleFrom(
@@ -1378,14 +1629,7 @@ class _JobResultCard extends StatelessWidget {
                 tooltip: 'Copy link',
                 onPressed: url == null
                     ? null
-                    : () async {
-                        await Clipboard.setData(ClipboardData(text: url));
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Link copied')),
-                          );
-                        }
-                      },
+                    : () => _onVisitOrCopy(context, url, isCopy: true),
                 icon: const Icon(Icons.copy_rounded),
               ),
               const SizedBox(width: 6),
@@ -1402,6 +1646,37 @@ class _JobResultCard extends StatelessWidget {
     );
   }
 
+  /// Shared gate for Visit page & Copy link
+  Future<void> _onVisitOrCopy(
+    BuildContext context,
+    String url, {
+    required bool isCopy,
+  }) async {
+    final ok = await AdsService.instance.showRewardedAdIfNeeded();
+    if (!ok) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please watch the short ad to continue.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (isCopy) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Link copied')),
+        );
+      }
+    } else {
+      // ignore: use_build_context_synchronously
+      await _openUrl(context, url);
+    }
+  }
+
   Future<void> _openUrl(BuildContext context, String url) async {
     final uri = Uri.parse(url);
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1416,8 +1691,9 @@ class _JobResultCard extends StatelessWidget {
     try {
       await SavedJobsStorage().save(job);
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Saved "${job.jobTitle}"')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved "${job.jobTitle}"')),
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -1426,6 +1702,40 @@ class _JobResultCard extends StatelessWidget {
         );
       }
     }
+  }
+}
+
+/// Small helper chip used inside the card
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _InfoChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1446,9 +1756,10 @@ class JobSearchRequest {
 
   String toGeminiPrompt() {
     return '''
-You are a professional job-search assistant.
+You are a professional job-search assistant with access to live Google Search.
 
-Your task is to find job opportunities that closely match the candidate information below.
+Your task is to find REAL, currently open job opportunities that closely match the candidate information below.
+You MUST use Google Search to look up real job postings. Do NOT invent jobs or URLs.
 
 CANDIDATE INFORMATION
 
@@ -1473,21 +1784,23 @@ SEARCH REQUIREMENTS
 2. Prioritize the requested target location.
 3. If includeRemoteJobs is true, remote opportunities may also be included.
 4. Match the requested experience level where possible.
-5. Do not invent missing information.
+5. Do not invent missing information. If a field is unknown, return an empty string "".
 6. Do not return explanatory text before or after the JSON.
 7. Return a maximum of 20 jobs.
 8. Every job must be represented as a JSON object.
-9. requirements must always be a JSON array of strings.
+9. requirements must always be a JSON array of strings (can be empty []).
 10. application_method must be exactly one of:
    "website",
    "email",
    "linkedin",
-   "other".
-11. If a value is unknown, return an empty string instead of inventing it.
-12. If no suitable jobs can be found, return an empty jobs array.
-13. ONLY return jobs posted or still open within the last 90 days from today (${DateTime.now().toIso8601String().substring(0, 10)}).
-14. For every job you MUST provide a real, working URL in "apply_url" or "source_url" that points to the actual job posting page (company career page, LinkedIn, Indeed, etc.). Never invent fake URLs.
-15. Prefer the direct application / job-detail page URL over a generic company homepage.
+   "other"
+   (or empty string "" if unknown).
+11. ONLY return jobs that are still open or were posted within the last 90 days from today (${DateTime.now().toIso8601String().substring(0, 10)}).
+12. For every job you SHOULD provide a real, working URL in "apply_url" or "source_url" that points to the actual job posting page (company career page, LinkedIn, Indeed, etc.). Never invent fake URLs. If you cannot find a real URL, leave both empty.
+13. Prefer the direct application / job-detail page URL over a generic company homepage.
+14. The "summary" field MUST accurately reflect the number of jobs in the "jobs" array.
+   - If jobs is empty → summary must clearly say that no suitable openings were found.
+   - Never claim you found jobs when the jobs array is empty.
 
 Return ONLY this JSON structure:
 
@@ -1496,21 +1809,21 @@ Return ONLY this JSON structure:
   "searched_at": "ISO-8601 date/time if known, otherwise empty string",
   "jobs": [
     {
-      "id": "unique job identifier",
-      "job_title": "Job title",
-      "company_name": "Company name",
-      "job_location": "Job location",
-      "work_mode": "Remote, Hybrid, On-site or unknown",
-      "employment_type": "Full-time, Part-time, Contract, Internship or unknown",
+      "id": "unique job identifier or empty string",
+      "job_title": "Job title or empty string",
+      "company_name": "Company name or empty string",
+      "job_location": "Job location or empty string",
+      "work_mode": "Remote, Hybrid, On-site or empty string",
+      "employment_type": "Full-time, Part-time, Contract, Internship or empty string",
       "posted_at": "Date posted or empty string",
       "application_deadline": "Application deadline or empty string",
-      "short_description": "Short description of the role",
+      "short_description": "Short description of the role or empty string",
       "requirements": [
         "Requirement 1",
         "Requirement 2"
       ],
       "company_url": "Company website URL or empty string",
-      "apply_url": "Direct application / job posting URL (required when possible)",
+      "apply_url": "Direct application / job posting URL or empty string",
       "application_method": "website",
       "source_url": "URL where the job information came from or empty string"
     }
@@ -1534,33 +1847,18 @@ enum JobApplicationMethod { website, email, linkedin, other }
 
 class JobResult {
   final String id;
-
   final String jobTitle;
   final String companyName;
-
   final String jobLocation;
   final String workMode;
   final String employmentType;
-
   final String postedAt;
   final String applicationDeadline;
-
   final String shortDescription;
   final List<String> requirements;
-
-  /// Actual company/company-job information page.
   final String companyUrl;
-
-  /// Best available legitimate application target.
-  ///
-  /// May be:
-  /// https://...
-  /// mailto:jobs@example.com
   final String applyUrl;
-
   final JobApplicationMethod applicationMethod;
-
-  /// URL from which this vacancy was verified.
   final String sourceUrl;
 
   const JobResult({
@@ -1592,49 +1890,41 @@ class JobResult {
         : <String>[];
 
     return JobResult(
-      id: _requiredJobString(json, 'id'),
-      jobTitle: _requiredJobString(json, 'job_title'),
-      companyName: _requiredJobString(json, 'company_name'),
-      jobLocation: _requiredJobString(json, 'job_location'),
-      workMode: _requiredJobString(json, 'work_mode'),
-      employmentType: _requiredJobString(json, 'employment_type'),
-      postedAt: _requiredJobString(json, 'posted_at'),
-      applicationDeadline: _requiredJobString(json, 'application_deadline'),
-      shortDescription: _requiredJobString(json, 'short_description'),
+      id: _optionalString(json, 'id'),
+      jobTitle: _optionalString(json, 'job_title'),
+      companyName: _optionalString(json, 'company_name'),
+      jobLocation: _optionalString(json, 'job_location'),
+      workMode: _optionalString(json, 'work_mode'),
+      employmentType: _optionalString(json, 'employment_type'),
+      postedAt: _optionalString(json, 'posted_at'),
+      applicationDeadline: _optionalString(json, 'application_deadline'),
+      shortDescription: _optionalString(json, 'short_description'),
       requirements: requirements,
-      companyUrl: _requiredJobString(json, 'company_url'),
-      applyUrl: _requiredJobString(json, 'apply_url'),
+      companyUrl: _optionalString(json, 'company_url'),
+      applyUrl: _optionalString(json, 'apply_url'),
       applicationMethod: _parseApplicationMethod(json['application_method']),
-      sourceUrl: _requiredJobString(json, 'source_url'),
+      sourceUrl: _optionalString(json, 'source_url'),
     );
   }
 
-  static String _requiredJobString(Map<String, dynamic> json, String key) {
+  static String _optionalString(Map<String, dynamic> json, String key) {
     final value = json[key];
-
-    if (value is! String || value.trim().isEmpty) {
-      throw FormatException('Invalid or missing job field: $key');
-    }
-
+    if (value is! String) return '';
     return value.trim();
   }
 
   static JobApplicationMethod _parseApplicationMethod(dynamic value) {
-    switch (value) {
+    switch (value?.toString().toLowerCase().trim()) {
       case 'website':
         return JobApplicationMethod.website;
-
       case 'email':
         return JobApplicationMethod.email;
-
       case 'linkedin':
         return JobApplicationMethod.linkedin;
-
       case 'other':
         return JobApplicationMethod.other;
-
       default:
-        throw const FormatException('Invalid application_method.');
+        return JobApplicationMethod.other; // safe default
     }
   }
 }
@@ -1689,77 +1979,6 @@ class JobSearchResponse {
       jobs: parsedJobs.take(20).toList(),
       summary: (json['summary'] as String?)?.trim() ?? '',
       searchedAt: (json['searched_at'] as String?)?.trim() ?? '',
-    );
-  }
-}
-
-class _ContactTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String value;
-  final VoidCallback onTap;
-
-  const _ContactTile({
-    required this.icon,
-    required this.title,
-    required this.value,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(17),
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(17),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.12)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0C75C).withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: const Color(0xFFF0C75C)),
-            ),
-
-            const SizedBox(width: 14),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    value,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const Icon(Icons.chevron_right),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1879,6 +2098,42 @@ class _SavedJobsSheetState extends State<_SavedJobsSheet> {
     });
   }
 
+  Future<void> _gatedAction(
+    BuildContext context, {
+    required String url,
+    required bool isCopy,
+  }) async {
+    final ok = await AdsService.instance.showRewardedAdIfNeeded();
+    if (!ok) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please watch the short ad to continue.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (isCopy) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Link copied')),
+        );
+      }
+    } else {
+      final uri = Uri.parse(url);
+      final opened =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open this link.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -1916,7 +2171,7 @@ class _SavedJobsSheetState extends State<_SavedJobsSheet> {
                 Expanded(
                   child: ListView.separated(
                     itemCount: _jobs.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final saved = _jobs[index];
                       final title = saved.name;
@@ -1954,18 +2209,26 @@ class _SavedJobsSheetState extends State<_SavedJobsSheet> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (url != null)
+                              if (url != null) ...[
                                 IconButton(
                                   tooltip: 'Visit page',
                                   icon: const Icon(Icons.open_in_new_rounded),
-                                  onPressed: () async {
-                                    final uri = Uri.parse(url!);
-                                    await launchUrl(
-                                      uri,
-                                      mode: LaunchMode.externalApplication,
-                                    );
-                                  },
+                                  onPressed: () => _gatedAction(
+                                    context,
+                                    url: url!,
+                                    isCopy: false,
+                                  ),
                                 ),
+                                IconButton(
+                                  tooltip: 'Copy link',
+                                  icon: const Icon(Icons.copy_rounded),
+                                  onPressed: () => _gatedAction(
+                                    context,
+                                    url: url!,
+                                    isCopy: true,
+                                  ),
+                                ),
+                              ],
                               IconButton(
                                 tooltip: 'Delete',
                                 icon: const Icon(
@@ -1981,13 +2244,11 @@ class _SavedJobsSheetState extends State<_SavedJobsSheet> {
                           ),
                           onTap: url == null
                               ? null
-                              : () async {
-                                  final uri = Uri.parse(url!);
-                                  await launchUrl(
-                                    uri,
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                },
+                              : () => _gatedAction(
+                                    context,
+                                    url: url!,
+                                    isCopy: false,
+                                  ),
                         ),
                       );
                     },
