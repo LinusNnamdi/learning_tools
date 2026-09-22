@@ -570,7 +570,8 @@ class ContactUsTab extends StatelessWidget {
   static const String contactEmail = 'earndeelimitedcompany@gmail.com';
 
   // TODO: Replace with your real social profile URLs.
-  static const String tiktokUrl = 'https://www.tiktok.com/@001_tech_wizard?_r=1&_t=ZS-98KTK1rBgjX';
+  static const String tiktokUrl =
+      'https://www.tiktok.com/@001_tech_wizard?_r=1&_t=ZS-98KTK1rBgjX';
   static const String linkedInUrl = 'https://www.linkedin.com/in/linus-okolo/';
   static const String githubUrl = 'https://github.com/LinusNnamdi/';
 
@@ -867,8 +868,8 @@ class _FindJobsTabState extends State<FindJobsTab> {
   final _skillsController = TextEditingController();
   final _currentLocationController = TextEditingController();
   final _targetLocationController = TextEditingController();
-final String kAndroidApkDownloadUrl =
-    'https://github.com/LinusNnamdi/learning_tools/actions/runs/35731611486/artifacts/10695318929';
+  final String kAndroidApkDownloadUrl =
+      'https://github.com/LinusNnamdi/learning_tools/actions/runs/35790723139/artifacts/10721544503';
 
   String _experienceLevel = 'Entry Level';
   bool _includeRemoteJobs = true;
@@ -1032,10 +1033,8 @@ final String kAndroidApkDownloadUrl =
                                 maxLines: 4,
                                 decoration: const InputDecoration(
                                   labelText: 'Your Skills',
-                                  hintText:
-                                      'Java, Plumber, Driver, GitHub Actions...',
-                                  prefixIcon:
-                                      Icon(Icons.psychology_outlined),
+                                  hintText: 'Java, Plumber, Driver, GitHub Actions...',
+                                  prefixIcon: Icon(Icons.psychology_outlined),
                                 ),
                                 validator: _requiredField,
                               ),
@@ -1046,8 +1045,7 @@ final String kAndroidApkDownloadUrl =
                                 decoration: const InputDecoration(
                                   labelText: 'Your Current Location',
                                   hintText: 'Country, state or city',
-                                  prefixIcon:
-                                      Icon(Icons.location_on_outlined),
+                                  prefixIcon: Icon(Icons.location_on_outlined),
                                 ),
                                 validator: _requiredField,
                               ),
@@ -1057,10 +1055,10 @@ final String kAndroidApkDownloadUrl =
                                 textInputAction: TextInputAction.next,
                                 decoration: const InputDecoration(
                                   labelText: 'Where Do You Want to Work?',
-                                  hintText:
-                                      'Country, state, city or Remote',
-                                  prefixIcon:
-                                      Icon(Icons.travel_explore_rounded),
+                                  hintText: 'Country, state, city or Remote',
+                                  prefixIcon: Icon(
+                                    Icons.travel_explore_rounded,
+                                  ),
                                 ),
                                 validator: _requiredField,
                               ),
@@ -1116,96 +1114,120 @@ final String kAndroidApkDownloadUrl =
                               ),
                               // …… inside the Form, after the SwitchListTile ……
 
-const SizedBox(height: 20),
+                              const SizedBox(height: 20),
 
-// ────────────────────────────────────────────────
-// MOBILE → normal AI search button
-// WEB    → disabled button + Download app button
-// ────────────────────────────────────────────────
-if (kIsWeb) ...[
-  // Disabled “Find Jobs With AI”
-  FilledButton.icon(
-    onPressed: null, // always disabled on web
-    icon: const Icon(Icons.auto_awesome_rounded),
-    label: const Text('Find Jobs With AI'),
-    style: FilledButton.styleFrom(
-      backgroundColor: const Color(0xFFF0C75C).withValues(alpha: 0.45),
-      foregroundColor: const Color(0xFF111827).withValues(alpha: 0.55),
-      padding: const EdgeInsets.symmetric(vertical: 16),
-    ),
-  ),
-
-  const SizedBox(height: 14),
-
-  // Download app button
-  OutlinedButton.icon(
-    onPressed: () async {
-      final uri = Uri.parse(kAndroidApkDownloadUrl);
-      final opened = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!opened && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open the download link.'),
-          ),
-        );
-      }
-    },
-    icon: const Icon(Icons.download_rounded),
-    label: const Text('Download app to continue'),
-    style: OutlinedButton.styleFrom(
-      foregroundColor: const Color(0xFF111827),
-      side: const BorderSide(color: Color(0xFFF0C75C), width: 1.8),
-      padding: const EdgeInsets.symmetric(vertical: 16),
-    ),
-  ),
-
-  const SizedBox(height: 12),
-
-  Text(
-    'AI job search uses paid API calls and is only available in the Android app (with rewarded ads). '
-    'Download the free APK to unlock it.',
-    textAlign: TextAlign.center,
-    style: theme.textTheme.bodySmall?.copyWith(
-      height: 1.45,
-      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.70),
-    ),
-  ),
-] else ...[
-  // Original mobile button
-  FilledButton.icon(
-    onPressed: _isSearching ? null : _prepareJobSearch,
-    icon: _isSearching
-        ? const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
-          )
-        : const Icon(Icons.auto_awesome_rounded),
-    label: Text(
-      _isSearching ? 'Searching Jobs...' : 'Find Jobs',
-    ),
-    style: FilledButton.styleFrom(
-      backgroundColor: const Color(0xFFF0C75C),
-      foregroundColor: const Color(0xFF111827),
-      padding: const EdgeInsets.symmetric(vertical: 16),
-    ),
-  ),
-
-  const SizedBox(height: 14),
-                              Text(
-                                'Ads help to monitor and secure info',
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  height: 1.45,
-                                  color: theme.textTheme.bodySmall?.color
-                                      ?.withValues(alpha: 0.70),
+                              // ────────────────────────────────────────────────
+                              // MOBILE → normal AI search button
+                              // WEB    → disabled button + Download app button
+                              // ────────────────────────────────────────────────
+                              if (kIsWeb) ...[
+                                // Disabled “Find Jobs With AI”
+                                FilledButton.icon(
+                                  onPressed: null, // always disabled on web
+                                  icon: const Icon(Icons.auto_awesome_rounded),
+                                  label: const Text('Find Jobs With AI'),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFFF0C75C)
+                                        .withValues(alpha: 0.45),
+                                    foregroundColor: const Color(0xFF111827)
+                                        .withValues(alpha: 0.55),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                  ),
                                 ),
-                              ),
-],
-                              
+
+                                const SizedBox(height: 14),
+
+                                // Download app button
+                                OutlinedButton.icon(
+                                  onPressed: () async {
+                                    final uri = Uri.parse(
+                                      kAndroidApkDownloadUrl,
+                                    );
+                                    final opened = await launchUrl(
+                                      uri,
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                    if (!opened && context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Could not open the download link.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.download_rounded),
+                                  label: const Text('Download app to continue'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF111827),
+                                    side: const BorderSide(
+                                      color: Color(0xFFF0C75C),
+                                      width: 1.8,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                Text(
+                                  'AI job search uses paid API calls and is only available in the Android app (with rewarded ads). '
+                                  'Download the free APK to unlock it.',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    height: 1.45,
+                                    color: theme.textTheme.bodySmall?.color
+                                        ?.withValues(alpha: 0.70),
+                                  ),
+                                ),
+                              ] else ...[
+                                // Original mobile button
+                                FilledButton.icon(
+                                  onPressed: _isSearching
+                                      ? null
+                                      : _prepareJobSearch,
+                                  icon: _isSearching
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                          ),
+                                        )
+                                      : const Icon(Icons.auto_awesome_rounded),
+                                  label: Text(
+                                    _isSearching
+                                        ? 'Searching Jobs...'
+                                        : 'Find Jobs',
+                                  ),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFFF0C75C),
+                                    foregroundColor: const Color(0xFF111827),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 14),
+                                Text(
+                                  'Ads help to monitor and secure info',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    height: 1.45,
+                                    color: theme.textTheme.bodySmall?.color
+                                        ?.withValues(alpha: 0.70),
+                                  ),
+                                ),
+                              ],
+
                               if (_searchError != null) ...[
                                 const SizedBox(height: 24),
                                 _JobSearchErrorCard(message: _searchError!),
@@ -1213,7 +1235,8 @@ if (kIsWeb) ...[
                               if (_searchResponse != null) ...[
                                 const SizedBox(height: 30),
                                 JobSearchResultsSection(
-                                    response: _searchResponse!),
+                                  response: _searchResponse!,
+                                ),
                               ],
                               BannerAdWidget(),
                             ],
@@ -1294,8 +1317,7 @@ if (kIsWeb) ...[
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _searchError =
-            'Unable to search for jobs right now. Please try again.';
+        _searchError = 'Unable to search for jobs right now. Please try again.';
       });
       debugPrint('Job search error: $error');
     } finally {
@@ -1324,8 +1346,7 @@ if (kIsWeb) ...[
       case 'unavailable':
         return 'The job-search service is temporarily unavailable.';
       case 'internal':
-        return error.message ??
-            'The AI service encountered an internal error.';
+        return error.message ?? 'The AI service encountered an internal error.';
       default:
         return error.message ?? 'Unable to complete the job search.';
     }
@@ -1492,7 +1513,6 @@ class _JobResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          
           // ---------- TITLE + COMPANY ----------
           if (job.jobTitle.isNotEmpty)
             Text(
@@ -1567,11 +1587,16 @@ class _JobResultCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('•  ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      '•  ',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     Expanded(
                       child: Text(
                         req,
-                        style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          height: 1.4,
+                        ),
                       ),
                     ),
                   ],
@@ -1581,7 +1606,8 @@ class _JobResultCard extends StatelessWidget {
           ],
 
           // ---------- POSTED / DEADLINE (optional) ----------
-          if (job.postedAt.isNotEmpty || job.applicationDeadline.isNotEmpty) ...[
+          if (job.postedAt.isNotEmpty ||
+              job.applicationDeadline.isNotEmpty) ...[
             const SizedBox(height: 14),
             Wrap(
               spacing: 16,
@@ -1590,14 +1616,18 @@ class _JobResultCard extends StatelessWidget {
                   Text(
                     'Posted: ${job.postedAt}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                      color: theme.textTheme.bodySmall?.color?.withValues(
+                        alpha: 0.7,
+                      ),
                     ),
                   ),
                 if (job.applicationDeadline.isNotEmpty)
                   Text(
                     'Deadline: ${job.applicationDeadline}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                      color: theme.textTheme.bodySmall?.color?.withValues(
+                        alpha: 0.7,
+                      ),
                     ),
                   ),
               ],
@@ -1667,9 +1697,8 @@ class _JobResultCard extends StatelessWidget {
     if (isCopy) {
       await Clipboard.setData(ClipboardData(text: url));
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Link copied')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Link copied')));
       }
     } else {
       // ignore: use_build_context_synchronously
@@ -1691,9 +1720,8 @@ class _JobResultCard extends StatelessWidget {
     try {
       await SavedJobsStorage().save(job);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved "${job.jobTitle}"')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Saved "${job.jobTitle}"')));
       }
     } catch (e) {
       if (context.mounted) {
@@ -2118,14 +2146,12 @@ class _SavedJobsSheetState extends State<_SavedJobsSheet> {
     if (isCopy) {
       await Clipboard.setData(ClipboardData(text: url));
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Link copied')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Link copied')));
       }
     } else {
       final uri = Uri.parse(url);
-      final opened =
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!opened && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Unable to open this link.')),
@@ -2245,10 +2271,10 @@ class _SavedJobsSheetState extends State<_SavedJobsSheet> {
                           onTap: url == null
                               ? null
                               : () => _gatedAction(
-                                    context,
-                                    url: url!,
-                                    isCopy: false,
-                                  ),
+                                  context,
+                                  url: url!,
+                                  isCopy: false,
+                                ),
                         ),
                       );
                     },
