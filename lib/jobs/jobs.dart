@@ -602,7 +602,6 @@ class ContactUsTab extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
 
                 Container(
                   padding: const EdgeInsets.all(24),
@@ -929,14 +928,19 @@ class _FindJobsTabState extends State<FindJobsTab> {
         // ★★★ Layout change: fixed top + scrollable form ★★★
         body: Column(
           children: [
-            IconButton(
-              tooltip: 'Help',
-              icon: const Icon(Icons.help_outline_rounded),
-              onPressed: () => openEarnDeeAiHelp(
-                context,
-                pageTitle: 'Job Finder',
-                faqs: HelpFaqData.jobFinder,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  tooltip: 'Help',
+                  icon: const Icon(Icons.help_outline_rounded),
+                  onPressed: () => openEarnDeeAiHelp(
+                    context,
+                    pageTitle: 'Job Finder',
+                    faqs: HelpFaqData.jobFinder,
+                  ),
+                ),
+              ],
             ),
             // ========== FIXED (non-scrollable) BANNER AREA ==========
             Padding(

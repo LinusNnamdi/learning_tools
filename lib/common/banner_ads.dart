@@ -77,7 +77,8 @@ class AdSenseBanner extends StatelessWidget {
 
   const AdSenseBanner({
     super.key,
-    this.adSlot = '1234567890', // ← replace with your real slot
+    // this.adSlot = '1234567890', // Test
+    this.adSlot = "5765666212", //Real
     this.width = 320,
     this.height = 100,
   });
