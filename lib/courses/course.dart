@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:learn/common/banner_ads.dart';
 import 'package:learn/common/common.dart';
+import 'package:learn/helps/help.dart';
 import 'package:provider/provider.dart';
 
 class Course {
@@ -69,129 +71,143 @@ class _CoursesScreenState extends State<CoursesScreen> {
       return categoryMatch && searchMatch;
     }).toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Courses',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Search',
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              _showSearchDialog(context);
-            },
+    return SafeArea(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Courses',
+            style: TextStyle(fontWeight: FontWeight.w800),
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _CoursesHeader(
-              totalCourses: controller.courses.length,
-              search: _search,
+          actions: [
+            IconButton(
+              tooltip: 'Search',
+              icon: const Icon(Icons.search),
+              onPressed: () {
+                _showSearchDialog(context);
+              },
             ),
-
-            SizedBox(
-              height: 52,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                scrollDirection: Axis.horizontal,
-                itemCount: categories.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final category = categories[index];
-                  final selected = category == _selectedCategory;
-
-                  return ChoiceChip(
-                    label: Text(category),
-                    selected: selected,
-                    onSelected: (_) {
-                      setState(() {
-                        _selectedCategory = category;
-                      });
-                    },
-                    selectedColor: const Color(0xFFF0C75C),
-                    labelStyle: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: selected
-                          ? const Color(0xFF111827)
-                          : theme.textTheme.bodyMedium?.color,
-                    ),
-                  );
-                },
+            IconButton(
+              tooltip: 'Help',
+              icon: const Icon(Icons.help_outline_rounded),
+              onPressed: () => openEarnDeeAiHelp(
+                context,
+                pageTitle: 'Courses',
+                faqs: HelpFaqData.courses,
               ),
             ),
-
-            const SizedBox(height: 10),
-
-            Expanded(
-              child: courses.isEmpty
-                  ? const _EmptyCourses()
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final width = constraints.maxWidth;
-
-                        int columns;
-
-                        if (width >= 1200) {
-                          columns = 4;
-                        } else if (width >= 850) {
-                          columns = 3;
-                        } else if (width >= 560) {
-                          columns = 2;
-                        } else {
-                          columns = 1;
-                        }
-
-                        return GridView.builder(
-                          padding: const EdgeInsets.all(20),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: columns,
-                                crossAxisSpacing: 16,
-                                mainAxisSpacing: 16,
-                                childAspectRatio: columns == 1 ? 1.35 : 0.92,
-                              ),
-                          itemCount: courses.length,
-                          itemBuilder: (context, index) {
-                            final course = courses[index];
-
-                            return CourseCard(
-                              course: course,
-
-                              onLearn: () {
-                                openCourseUrl(
-                                  context,
-                                  title: 'Learn ${course.name}',
-                                  url: course.learnUrl,
-                                );
-                              },
-
-                              onPractice: () {
-                                if (!isConfiguredSkillUrl(course.projectUrl)) {
-                                  showSkillPageNotReady(
-                                    context,
-                                    skillName: course.name,
-                                    pageType: 'practice project',
-                                  );
-                                  return;
-                                }
-
-                                openCourseUrl(
-                                  context,
-                                  title: '${course.name} Practice Project',
-                                  url: course.projectUrl,
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    ),
-            ),
           ],
+        ),
+        body: ResponsiveAdShell(
+          showTopOnSmall: true,
+          child: Column(
+            children: [
+              _CoursesHeader(
+                totalCourses: controller.courses.length,
+                search: _search,
+              ),
+
+              SizedBox(
+                height: 52,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categories.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final category = categories[index];
+                    final selected = category == _selectedCategory;
+
+                    return ChoiceChip(
+                      label: Text(category),
+                      selected: selected,
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedCategory = category;
+                        });
+                      },
+                      selectedColor: const Color(0xFFF0C75C),
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: selected
+                            ? const Color(0xFF111827)
+                            : theme.textTheme.bodyMedium?.color,
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              Expanded(
+                child: courses.isEmpty
+                    ? const _EmptyCourses()
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final width = constraints.maxWidth;
+
+                          int columns;
+
+                          if (width >= 1200) {
+                            columns = 4;
+                          } else if (width >= 850) {
+                            columns = 3;
+                          } else if (width >= 560) {
+                            columns = 2;
+                          } else {
+                            columns = 1;
+                          }
+
+                          return GridView.builder(
+                            padding: const EdgeInsets.all(20),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 16,
+                                  childAspectRatio: columns == 1 ? 1.35 : 0.92,
+                                ),
+                            itemCount: courses.length,
+                            itemBuilder: (context, index) {
+                              final course = courses[index];
+
+                              return CourseCard(
+                                course: course,
+
+                                onLearn: () {
+                                  openCourseUrl(
+                                    context,
+                                    title: 'Learn ${course.name}',
+                                    url: course.learnUrl,
+                                  );
+                                },
+
+                                onPractice: () {
+                                  if (!isConfiguredSkillUrl(
+                                    course.projectUrl,
+                                  )) {
+                                    showSkillPageNotReady(
+                                      context,
+                                      skillName: course.name,
+                                      pageType: 'practice project',
+                                    );
+                                    return;
+                                  }
+
+                                  openCourseUrl(
+                                    context,
+                                    title: '${course.name} Practice Project',
+                                    url: course.projectUrl,
+                                  );
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

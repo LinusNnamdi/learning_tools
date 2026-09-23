@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:learn/common/banner_ads.dart';
 import 'package:learn/common/common.dart';
 import 'package:learn/courses/course.dart';
 import 'package:learn/games/games.dart';
+import 'package:learn/helps/help.dart';
 import 'package:learn/jobs/jobs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
@@ -2310,131 +2312,81 @@ class WorkspaceScreen extends StatelessWidget {
 
     final diagramController = context.watch<DiagramController>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Icon(Icons.account_tree_rounded, color: Color(0xFFF0C75C)),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                diagramController.currentProjectName ?? 'Untitled Project',
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w900),
+    return SafeArea(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Row(
+            children: [
+              const Icon(Icons.account_tree_rounded, color: Color(0xFFF0C75C)),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  diagramController.currentProjectName ?? 'Untitled Project',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+
+          actions: [
+            IconButton(
+              tooltip: themeController.isDarkMode
+                  ? 'Switch to light mode'
+                  : 'Switch to dark mode',
+              onPressed: () {
+                themeController.toggleLightDark();
+              },
+              icon: Icon(
+                !(themeController.isDarkMode)
+                    ? Icons.light_mode_rounded
+                    : Icons.dark_mode_rounded,
               ),
             ),
+
+  IconButton(
+    tooltip: 'Help',
+    icon: const Icon(Icons.help_outline_rounded),
+    onPressed: () => openEarnDeeAiHelp(
+      context,
+      pageTitle: 'Workspace',
+      faqs: HelpFaqData.workspace,
+    ),
+  ),
+
+            IconButton(
+              tooltip: 'Notifications',
+              onPressed: () {},
+              icon: const Icon(Icons.notifications_none_rounded),
+            ),
+
+            const SizedBox(width: 8),
           ],
         ),
-
-        actions: [
-          IconButton(
-            tooltip: themeController.isDarkMode
-                ? 'Switch to light mode'
-                : 'Switch to dark mode',
-            onPressed: () {
-              themeController.toggleLightDark();
-            },
-            icon: Icon(
-              !(themeController.isDarkMode)
-                  ? Icons.light_mode_rounded
-                  : Icons.dark_mode_rounded,
-            ),
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: const Color(0xFFF0C75C),
+          foregroundColor: const Color(0xFF111827),
+          icon: const Icon(Icons.save_rounded),
+          label: const Text(
+            'Save',
+            style: TextStyle(fontWeight: FontWeight.w800),
           ),
-
-          IconButton(
-            tooltip: 'Help',
-            onPressed: () {
-              _showHelp(context);
-            },
-            icon: const Icon(Icons.help_outline_rounded),
-          ),
-
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_rounded),
-          ),
-
-          const SizedBox(width: 8),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFF0C75C),
-        foregroundColor: const Color(0xFF111827),
-        icon: const Icon(Icons.save_rounded),
-        label: const Text(
-          'Save',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          onPressed: () {
+            _showSaveDialog(context, diagramController);
+          },
         ),
-        onPressed: () {
-          _showSaveDialog(context, diagramController);
-        },
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const ShapePalette(),
-            _ActionToolbar(controller: diagramController),
-            const Expanded(child: DiagramCanvas()),
-          ],
+        body: ResponsiveAdShell(
+          showTopOnSmall: true,
+          showBottomOnSmall: false,
+          child: Column(
+            children: [
+              const ShapePalette(),
+              _ActionToolbar(controller: diagramController),
+              const Expanded(child: DiagramCanvas()),
+            ],
+          ),
         ),
       ),
-    );
-  }
-
-  void _showHelp(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 30),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Learning Tech Help',
-                  style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
-                ),
-
-                const SizedBox(height: 18),
-
-                _HelpItem(
-                  icon: Icons.touch_app_outlined,
-                  text: 'Tap a component to select it.',
-                ),
-
-                _HelpItem(
-                  icon: Icons.open_with_outlined,
-                  text: 'Drag a selected component to move it.',
-                ),
-
-                _HelpItem(
-                  icon: Icons.crop_free_outlined,
-                  text: 'Drag the resize handle to change its size.',
-                ),
-
-                _HelpItem(
-                  icon: Icons.touch_app,
-                  text: 'Long press components to support multiple selection and editing.',
-                ),
-
-                _HelpItem(
-                  icon: Icons.link,
-                  text: 'Select Connect and tap two shapes to create a connection.',
-                ),
-
-                _HelpItem(
-                  icon: Icons.play_arrow_rounded,
-                  text: 'Play demonstrates the movement of information through your architecture.',
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -3565,30 +3517,6 @@ class _ToolButton extends StatelessWidget {
   }
 }
 
-class _HelpItem extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _HelpItem({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 21, color: const Color(0xFFF0C75C)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(text, style: Theme.of(context).textTheme.bodyLarge),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _CanvasBackgroundPainter extends CustomPainter {
   final bool isDark;
 
@@ -4161,9 +4089,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
               )
             : null,
       ),
-      body: _hasError
-          ? _ErrorView(onRetry: _reload)
-          : WebViewWidget(controller: _controller),
+      body: Column(
+        children: [
+          // ★ Ad right under AppBar
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: Center(child: PlatformBannerAd()),
+          ),
+          Expanded(
+            child: _hasError
+                ? _ErrorView(onRetry: _reload)
+                : WebViewWidget(controller: _controller),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -4215,21 +4154,13 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
-
   bool _workspaceOpen = false;
 
-  void _openWorkspace() {
-    setState(() {
-      _workspaceOpen = true;
-    });
-  }
+  static const double _wideBreakpoint = 900;
 
-  // void _openHome() {
-  //   setState(() {
-  //     _workspaceOpen = false;
-  //     _currentIndex = 0;
-  //   });
-  // }
+  void _openWorkspace() {
+    setState(() => _workspaceOpen = true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4242,38 +4173,92 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const JobsScreen(),
     ];
 
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= _wideBreakpoint;
+
+        if (isWide) {
+          // ─── LARGE SCREEN: left NavigationRail ───
+          return Scaffold(
+            body: Row(
+              children: [
+                NavigationRail(
+                  selectedIndex: _currentIndex,
+                  onDestinationSelected: (index) {
+                    setState(() => _currentIndex = index);
+                  },
+                  labelType: NavigationRailLabelType.all,
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  indicatorColor: const Color(0xFFF0C75C)
+                      .withValues(alpha: 0.3),
+                  selectedIconTheme: const IconThemeData(
+                    color: Color(0xFF111827),
+                  ),
+                  destinations: const [
+                    NavigationRailDestination(
+                      icon: Icon(Icons.home_outlined),
+                      selectedIcon: Icon(Icons.home_rounded),
+                      label: Text('Home'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.school_outlined),
+                      selectedIcon: Icon(Icons.school),
+                      label: Text('Courses'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.sports_esports_outlined),
+                      selectedIcon: Icon(Icons.sports_esports),
+                      label: Text('Games'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.work_outline_rounded),
+                      selectedIcon: Icon(Icons.work_rounded),
+                      label: Text('Jobs'),
+                    ),
+                  ],
+                ),
+                const VerticalDivider(thickness: 1, width: 1),
+                Expanded(
+                  child: IndexedStack(index: _currentIndex, children: pages),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // ─── SMALL SCREEN: classic bottom NavigationBar ───
+        return Scaffold(
+          body: IndexedStack(index: _currentIndex, children: pages),
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (index) {
+              setState(() => _currentIndex = index);
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'Home',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.school_outlined),
+                selectedIcon: Icon(Icons.school),
+                label: 'Courses',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.sports_esports_outlined),
+                selectedIcon: Icon(Icons.sports_esports),
+                label: 'Games',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.work_outline_rounded),
+                selectedIcon: Icon(Icons.work_rounded),
+                label: 'Jobs',
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.school_outlined),
-            selectedIcon: Icon(Icons.school),
-            label: 'Courses',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.sports_esports_outlined),
-            selectedIcon: Icon(Icons.sports_esports),
-            label: 'Games',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.work_outline_rounded),
-            selectedIcon: Icon(Icons.work_rounded),
-            label: 'Jobs',
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

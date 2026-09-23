@@ -7,10 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:learn/common/banner_ads.dart';
 import 'package:learn/common/common.dart';
 import 'package:learn/common/reward_ads.dart';
+import 'package:learn/helps/help.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-//prepareJobsearch
+//const PlatformBannerAd()
 
 bool isSafeHttpUrl(String value) {
   final uri = Uri.tryParse(value);
@@ -588,6 +589,19 @@ class ContactUsTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // At the top of ContactUsTab Column children
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    tooltip: 'Help',
+                    icon: const Icon(Icons.help_outline_rounded),
+                    onPressed: () => openEarnDeeAiHelp(
+                      context,
+                      pageTitle: 'Contact Us',
+                      faqs: HelpFaqData.contactUs,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 10),
 
                 Container(
@@ -874,8 +888,8 @@ class _FindJobsTabState extends State<FindJobsTab> {
   String _experienceLevel = 'Entry Level';
   bool _includeRemoteJobs = true;
 
-  // ★ Controls the disclaimer → BannerAd switch
-  bool _showBannerAd = false;
+  // ★ Controls the disclaimer → BannerAdWidget switch
+  bool _showBannerAdWidget = false;
 
   @override
   void initState() {
@@ -885,7 +899,7 @@ class _FindJobsTabState extends State<FindJobsTab> {
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         setState(() {
-          _showBannerAd = true;
+          _showBannerAdWidget = true;
         });
       }
     });
@@ -915,13 +929,22 @@ class _FindJobsTabState extends State<FindJobsTab> {
         // ★★★ Layout change: fixed top + scrollable form ★★★
         body: Column(
           children: [
+            IconButton(
+              tooltip: 'Help',
+              icon: const Icon(Icons.help_outline_rounded),
+              onPressed: () => openEarnDeeAiHelp(
+                context,
+                pageTitle: 'Job Finder',
+                faqs: HelpFaqData.jobFinder,
+              ),
+            ),
             // ========== FIXED (non-scrollable) BANNER AREA ==========
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 500),
-                child: _showBannerAd
-                    ? const BannerAdWidget() // ← your ad widget
+                child: _showBannerAdWidget
+                    ? const PlatformBannerAd() // ← your ad widget
                     : Container(
                         key: const ValueKey('disclaimer'),
                         width: double.infinity,
@@ -1238,7 +1261,7 @@ class _FindJobsTabState extends State<FindJobsTab> {
                                   response: _searchResponse!,
                                 ),
                               ],
-                              BannerAdWidget(),
+                              const PlatformBannerAd(),
                             ],
                           ),
                         ),
@@ -1471,7 +1494,7 @@ class JobSearchResultsSection extends StatelessWidget {
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
         ],
-        BannerAdWidget(),
+        const PlatformBannerAd(),
 
         const SizedBox(height: 20),
 
