@@ -25,6 +25,11 @@ dependencies:
   webview_flutter: ^4.14.1
   google_mobile_ads: ^9.1.0
   connectivity_plus: ^7.3.1
+  downloadsfolder: ^1.2.0
+  path_provider: ^2.1.6
+  share_plus: ^13.3.0
+  permission_handler: ^13.0.2
+  ffmpeg_kit_flutter_new: ^4.6.2
 
 dev_dependencies:
   flutter_test:

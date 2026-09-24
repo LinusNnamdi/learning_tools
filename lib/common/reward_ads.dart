@@ -137,15 +137,3 @@ Future<bool> showRewardedAdIfNeeded() async {
     return completer.future;
   }
 }
-
-
-//   String _getAdUnitId() {
-//     if (Platform.isAndroid) {
-//       return 'ca-app-pub-3940256099942544/5224354917'; // Test ID
-//       // return 'ca-app-pub-7018091756479171/8581813853'; // Real ID
-//     } else if (Platform.isIOS) {
-//       return 'ca-app-pub-3940256099942544/1712485313'; // Test ID
-//     } else {
-//       throw UnsupportedError('Unsupported platform');
-//     }
-//   }

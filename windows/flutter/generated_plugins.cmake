@@ -4,8 +4,12 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
+  downloadsfolder
+  ffmpeg_kit_flutter_new
   firebase_app_check
   firebase_core
+  permission_handler_windows
+  share_plus
   url_launcher_windows
 )
 

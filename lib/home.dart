@@ -1,20 +1,29 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:learn/common/banner_ads.dart';
 import 'package:learn/common/common.dart';
+import 'package:learn/common/reward_ads.dart';
 import 'package:learn/courses/course.dart';
 import 'package:learn/games/games.dart';
 import 'package:learn/helps/help.dart';
 import 'package:learn/jobs/jobs.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-//_copygroup
+//export()
 class LearningTechApp extends StatelessWidget {
   const LearningTechApp({super.key});
 
@@ -2195,112 +2204,81 @@ class _DiagramCanvasState extends State<DiagramCanvas>
   }
 }
 
-void _showSaveDialog(BuildContext context, DiagramController controller) {
-  final nameController = TextEditingController(
-    text: controller.currentProjectName ?? '',
-  );
-  final folderController = TextEditingController(
-    text: controller.currentFolder.isEmpty
-        ? 'General'
-        : controller.currentFolder,
-  );
-
-  showDialog<void>(
+void _showSaveOptions(BuildContext context, DiagramController controller) {
+  showModalBottomSheet<void>(
     context: context,
-    builder: (dialogContext) {
-      return FutureBuilder<List<String>>(
-        future: DiagramStorage().listFolders(),
-        builder: (context, snapshot) {
-          final existingFolders = snapshot.data ?? <String>[];
-
-          return AlertDialog(
-            title: const Text(
-              'Save diagram',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'File name',
-                      hintText: 'e.g. API architecture',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: folderController,
-                    decoration: const InputDecoration(
-                      labelText: 'Folder',
-                      hintText: 'Type any folder name',
-                      helperText: 'Create a new folder just by typing its name',
-                    ),
-                  ),
-                  if (existingFolders.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'Or pick an existing folder',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: existingFolders.map((f) {
-                        return ActionChip(
-                          label: Text(f),
-                          onPressed: () {
-                            folderController.text = f;
-                          },
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  final project = await DiagramStorage().save(
-                    name: nameController.text,
-                    folder: folderController.text,
-                    data: controller.exportJson(),
-                    existingId: controller.currentProjectId,
-                  );
-                  controller.currentProjectId = project.id;
-                  controller.currentProjectName = project.name;
-                  controller.currentFolder = project.folder;
-                  if (dialogContext.mounted) {
-                    Navigator.pop(dialogContext);
-                  }
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Saved "${project.name}" in ${project.folder}/',
-                        ),
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          );
-        },
-      );
-    },
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.folder_rounded),
+            title: const Text('Save as Project File'),
+            subtitle: const Text('Normal workspace save (existing behaviour)'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _showSaveDialog(context, controller); // ← unchanged
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.videocam_rounded),
+            title: const Text('Export Animation as Video (10 s)'),
+            subtitle: const Text('Crop → rewarded ad (mobile) → MP4'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _startVideoExportFlow(context, controller);
+            },
+          ),
+        ],
+      ),
+    ),
   );
+}
+
+Future<void> _startVideoExportFlow(
+  BuildContext context,
+  DiagramController controller,
+) async {
+  if (kIsWeb) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Video export is app-only'),
+        content: const Text(
+          'Video export uses device resources and rewarded ads. '
+          'Download the free Android app to export a 10-second MP4.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+
+  final ok = await AdsService.instance.showRewardedAdIfNeeded();
+  if (!ok) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please watch the short ad to export the video.'),
+        ),
+      );
+    }
+    return;
+  }
+
+  if (context.mounted) {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VideoCropAndExportScreen(controller: controller),
+      ),
+    );
+  }
 }
 
 class WorkspaceScreen extends StatelessWidget {
@@ -2344,15 +2322,15 @@ class WorkspaceScreen extends StatelessWidget {
               ),
             ),
 
-  IconButton(
-    tooltip: 'Help',
-    icon: const Icon(Icons.help_outline_rounded),
-    onPressed: () => openEarnDeeAiHelp(
-      context,
-      pageTitle: 'Workspace',
-      faqs: HelpFaqData.workspace,
-    ),
-  ),
+            IconButton(
+              tooltip: 'Help',
+              icon: const Icon(Icons.help_outline_rounded),
+              onPressed: () => openEarnDeeAiHelp(
+                context,
+                pageTitle: 'Workspace',
+                faqs: HelpFaqData.workspace,
+              ),
+            ),
 
             IconButton(
               tooltip: 'Notifications',
@@ -2371,9 +2349,7 @@ class WorkspaceScreen extends StatelessWidget {
             'Save',
             style: TextStyle(fontWeight: FontWeight.w800),
           ),
-          onPressed: () {
-            _showSaveDialog(context, diagramController);
-          },
+          onPressed: () => _showSaveOptions(context, diagramController),
         ),
         body: ResponsiveAdShell(
           showTopOnSmall: true,
@@ -4528,4 +4504,571 @@ class _SavedFilesSheetState extends State<_SavedFilesSheet> {
       ),
     );
   }
+}
+
+// ── Crop helpers ────────────────────────────────────────────────────
+enum _CropHandle { move, tl, tr, bl, br }
+
+// ── Import whatever file contains DiagramController, DiagramShape,
+//    DiagramGroup, DiagramLine, ShapeType, LineType, _ShapePainter,
+//    _CanvasBackgroundPainter, _LinePainter, ShapeWidget, _GroupWidget
+//    (or move the pure painting widgets into a shared file).
+//    Adjust the import path to match your project.
+
+class VideoCropAndExportScreen extends StatefulWidget {
+  final DiagramController controller;
+
+  const VideoCropAndExportScreen({super.key, required this.controller});
+
+  @override
+  State<VideoCropAndExportScreen> createState() =>
+      _VideoCropAndExportScreenState();
+}
+
+class _VideoCropAndExportScreenState extends State<VideoCropAndExportScreen> {
+  final GlobalKey _boundaryKey = GlobalKey();
+
+  // Crop rectangle in the fixed canvas coordinate space (0‥1800 × 0‥1200)
+  Rect _cropRect = const Rect.fromLTWH(200, 150, 800, 500);
+  bool _exporting = false;
+  double _progress = 0.0;
+
+  // Simple drag handles for the crop rect
+  Offset? _dragStart;
+  Rect? _rectAtDragStart;
+  _CropHandle? _activeHandle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Export 10 s Video',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        actions: [
+          if (!_exporting)
+            TextButton(
+              onPressed: _export,
+              child: const Text(
+                'Export',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // ── The actual content that will be recorded ──────────────────
+          // Fitted into the available space so the user can see it,
+          // but the RepaintBoundary always captures the native 1800×1200.
+          Center(
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: SizedBox(
+                width: 1800,
+                height: 1200,
+                child: RepaintBoundary(
+                  key: _boundaryKey,
+                  child: _ExportableDiagram(controller: widget.controller),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Crop overlay (only while not exporting) ───────────────────
+          if (!_exporting)
+            Positioned.fill(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Scale factors from the FittedBox
+                  final scaleX = constraints.maxWidth / 1800;
+                  final scaleY = constraints.maxHeight / 1200;
+                  final scale = math.min(scaleX, scaleY);
+                  final offsetX = (constraints.maxWidth - 1800 * scale) / 2;
+                  final offsetY = (constraints.maxHeight - 1200 * scale) / 2;
+
+                  final screenRect = Rect.fromLTWH(
+                    offsetX + _cropRect.left * scale,
+                    offsetY + _cropRect.top * scale,
+                    _cropRect.width * scale,
+                    _cropRect.height * scale,
+                  );
+
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanStart: (d) {
+                      _dragStart = d.localPosition;
+                      _rectAtDragStart = _cropRect;
+                      _activeHandle = _hitTestHandle(
+                        screenRect,
+                        d.localPosition,
+                      );
+                    },
+                    onPanUpdate: (d) {
+                      if (_dragStart == null || _rectAtDragStart == null)return;
+                        
+                      final dx = (d.localPosition.dx - _dragStart!.dx) / scale;
+                      final dy = (d.localPosition.dy - _dragStart!.dy) / scale;
+                      setState(() {
+                        _cropRect = _applyHandleDrag(
+                          _rectAtDragStart!,
+                          _activeHandle,
+                          dx,
+                          dy,
+                        ).intersect(const Rect.fromLTWH(0, 0, 1800, 1200));
+                      });
+                    },
+                    onPanEnd: (_) {
+                      _dragStart = null;
+                      _rectAtDragStart = null;
+                      _activeHandle = null;
+                    },
+                    child: CustomPaint(
+                      painter: _CropOverlayPainter(screenRect: screenRect),
+                      size: Size(constraints.maxWidth, constraints.maxHeight),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          // ── Export progress ───────────────────────────────────────────
+          if (_exporting)
+            Container(
+              color: Colors.black54,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: CircularProgressIndicator(
+                        value: _progress,
+                        color: const Color(0xFFF0C75C),
+                        strokeWidth: 5,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Exporting… ${(_progress * 100).toStringAsFixed(0)}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  _CropHandle? _hitTestHandle(Rect screenRect, Offset p) {
+    const handleSize = 28.0;
+    if ((p - screenRect.topLeft).distance < handleSize) return _CropHandle.tl;
+    if ((p - screenRect.topRight).distance < handleSize) return _CropHandle.tr;
+    if ((p - screenRect.bottomLeft).distance < handleSize)return _CropHandle.bl;
+      
+    if ((p - screenRect.bottomRight).distance < handleSize)  return _CropHandle.br;
+    
+    if (screenRect.contains(p)) return _CropHandle.move;
+    return null;
+  }
+
+  Rect _applyHandleDrag(Rect start, _CropHandle? handle, double dx, double dy) {
+    switch (handle) {
+      case _CropHandle.move:
+        return start.shift(Offset(dx, dy));
+      case _CropHandle.tl:
+        return Rect.fromLTRB(
+          start.left + dx,
+          start.top + dy,
+          start.right,
+          start.bottom,
+        );
+      case _CropHandle.tr:
+        return Rect.fromLTRB(
+          start.left,
+          start.top + dy,
+          start.right + dx,
+          start.bottom,
+        );
+      case _CropHandle.bl:
+        return Rect.fromLTRB(
+          start.left + dx,
+          start.top,
+          start.right,
+          start.bottom + dy,
+        );
+      case _CropHandle.br:
+        return Rect.fromLTRB(
+          start.left,
+          start.top,
+          start.right + dx,
+          start.bottom + dy,
+        );
+      default:
+        return start;
+    }
+  }
+
+  // ── Capture + encode ────────────────────────────────────────────────
+  Future<void> _export() async {
+    if (_exporting) return;
+    setState(() {
+      _exporting = true;
+      _progress = 0;
+    });
+
+    final tempDir = await getTemporaryDirectory();
+    final framesDir = Directory(
+      '${tempDir.path}/lt_frames_${DateTime.now().millisecondsSinceEpoch}',
+    );
+    await framesDir.create(recursive: true);
+
+    const fps = 12;
+    const durationSec = 10;
+    final totalFrames = fps * durationSec;
+
+    // Drive the existing animation system
+widget.controller.pause();
+widget.controller.resetAnimation();
+
+// Particles are only drawn when isPlaying == true
+widget.controller.play();          // ← add this line
+
+try {
+  for (var i = 0; i < totalFrames; i++) {
+    final t = i / (totalFrames - 1);
+    widget.controller.updateAnimation(t);
+    await Future.delayed(const Duration(milliseconds: 40));
+    await WidgetsBinding.instance.endOfFrame;
+
+    final boundary =
+        _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null || !boundary.hasSize) continue;
+
+    final image = await boundary.toImage(pixelRatio: 1.5);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    if (byteData == null) continue;
+
+    final file = File(
+      '${framesDir.path}/frame_${i.toString().padLeft(5, '0')}.png',
+    );
+    await file.writeAsBytes(byteData.buffer.asUint8List());
+
+    if (mounted) setState(() => _progress = (i + 1) / totalFrames);
+  }
+} finally {
+  // Always restore the previous play state
+  widget.controller.pause();
+}
+
+    // Encode
+    final outPath =
+        '${tempDir.path}/LearningTech_${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+    final pr = 1.5;
+    final x = (_cropRect.left * pr).round().clamp(0, 99999);
+    final y = (_cropRect.top * pr).round().clamp(0, 99999);
+    final w = (_cropRect.width * pr).round().clamp(2, 99999);
+    final h = (_cropRect.height * pr).round().clamp(2, 99999);
+    // force even dimensions for libx264
+    final evenW = w - (w % 2);
+    final evenH = h - (h % 2);
+
+    final cmd =
+        '-y -framerate $fps -i ${framesDir.path}/frame_%05d.png '
+        '-vf "crop=$evenW:$evenH:$x:$y,scale=trunc(iw/2)*2:trunc(ih/2)*2" '
+        '-c:v libx264 -pix_fmt yuv420p -preset ultrafast -crf 23 '
+        '$outPath';
+
+    final session = await FFmpegKit.execute(cmd);
+    final returnCode = await session.getReturnCode();
+
+    try {
+      await framesDir.delete(recursive: true);
+    } catch (_) {}
+
+    if (!ReturnCode.isSuccess(returnCode)) {
+      if (mounted) {
+        setState(() => _exporting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Video encoding failed. Try a smaller crop area or lower quality.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    await _saveAndShare(outPath);
+
+    if (mounted) {
+      setState(() => _exporting = false);
+      Navigator.of(context).pop(); // back to workspace
+    }
+  }
+
+  Future<void> _saveAndShare(String path) async {
+    final params = ShareParams(
+      files: [
+        XFile(path, mimeType: 'video/mp4', name: 'LearningTech_Animation.mp4'),
+      ],
+      text: 'My Learning Tech workspace animation',
+    );
+    await SharePlus.instance.share(params);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Exportable diagram – pure visual copy of the canvas (no InteractiveViewer,
+// no gestures). Uses the same painters / widgets you already have.
+// ─────────────────────────────────────────────────────────────────────
+class _ExportableDiagram extends StatelessWidget {
+  final DiagramController controller;
+
+  const _ExportableDiagram({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
+        // Same background the real workspace uses
+        final bgColor = theme.colorScheme.surfaceContainerLowest;
+
+        return ColoredBox(
+          // ← solid background
+          color: bgColor,
+          child: SizedBox(
+            width: 1800,
+            height: 1200,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Grid on top of the solid colour
+                CustomPaint(
+                  size: const Size(1800, 1200),
+                  painter: _CanvasBackgroundPainter(isDark: isDark),
+                ),
+
+                // Groups
+                ...controller.groups.map((group) {
+                  return _GroupWidget(
+                    key: ValueKey(group.id),
+                    group: group,
+                    selected: false,
+                    onTap: () {},
+                    onLongPress: () {},
+                    onMove: (_) {},
+                    onMoveEnd: () {},
+                    onResize: (_) {},
+                  );
+                }),
+
+                // Lines (particles now visible because isPlaying == true)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _LinePainter(
+                        controller: controller,
+                        animationValue: controller.animationProgress,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Shapes
+                ...controller.shapes.map((shape) {
+                  return ShapeWidget(
+                    shape: shape,
+                    selected: false,
+                    onTap: () {},
+                    onLongPress: () {},
+                    onResize: (_) {},
+                    onMove: (_) {},
+                    onMoveEnd: () {},
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Simple crop overlay painter
+// ─────────────────────────────────────────────────────────────────────
+class _CropOverlayPainter extends CustomPainter {
+  final Rect screenRect;
+
+  _CropOverlayPainter({required this.screenRect});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Dim everything outside the crop
+    final overlay = Path()
+      ..addRect(Offset.zero & size)
+      ..addRect(screenRect)
+      ..fillType = PathFillType.evenOdd;
+
+    canvas.drawPath(
+      overlay,
+      Paint()..color = Colors.black.withValues(alpha: 0.55),
+    );
+
+    // Border
+    canvas.drawRect(
+      screenRect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..color = const Color(0xFFF0C75C),
+    );
+
+    // Corner handles
+    const handle = 14.0;
+    final paint = Paint()..color = const Color(0xFFF0C75C);
+    for (final c in [
+      screenRect.topLeft,
+      screenRect.topRight,
+      screenRect.bottomLeft,
+      screenRect.bottomRight,
+    ]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: c, width: handle, height: handle),
+          const Radius.circular(3),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CropOverlayPainter old) =>
+      old.screenRect != screenRect;
+}
+
+void _showSaveDialog(BuildContext context, DiagramController controller) {
+  final nameController = TextEditingController(
+    text: controller.currentProjectName ?? '',
+  );
+  final folderController = TextEditingController(
+    text: controller.currentFolder.isEmpty
+        ? 'General'
+        : controller.currentFolder,
+  );
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return FutureBuilder<List<String>>(
+        future: DiagramStorage().listFolders(),
+        builder: (context, snapshot) {
+          final existingFolders = snapshot.data ?? <String>[];
+
+          return AlertDialog(
+            title: const Text(
+              'Save diagram',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'File name',
+                      hintText: 'e.g. API architecture',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: folderController,
+                    decoration: const InputDecoration(
+                      labelText: 'Folder',
+                      hintText: 'Type any folder name',
+                      helperText: 'Create a new folder just by typing its name',
+                    ),
+                  ),
+                  if (existingFolders.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Or pick an existing folder',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: existingFolders.map((f) {
+                        return ActionChip(
+                          label: Text(f),
+                          onPressed: () {
+                            folderController.text = f;
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final project = await DiagramStorage().save(
+                    name: nameController.text,
+                    folder: folderController.text,
+                    data: controller.exportJson(),
+                    existingId: controller.currentProjectId,
+                  );
+                  controller.currentProjectId = project.id;
+                  controller.currentProjectName = project.name;
+                  controller.currentFolder = project.folder;
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Saved "${project.name}" in ${project.folder}/',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }

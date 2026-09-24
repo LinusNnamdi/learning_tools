@@ -332,7 +332,7 @@ class EarnDeeAiHelpScreen extends StatelessWidget {
       body: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         itemCount: faqs.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
           final item = faqs[index];
           return _FaqQuestionTile(item: item);

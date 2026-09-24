@@ -203,20 +203,38 @@ bool get supportsEmbeddedWebView {
       defaultTargetPlatform == TargetPlatform.iOS;
 }
 
+// The shared placeholder URLs currently used by almost every course.
+// When you change a course’s projectUrl / gameUrl to something else,
+// that course becomes “configured” and opens normally.
+const String kPlaceholderProjectUrl =
+    'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html';
+const String kPlaceholderGameUrl =
+    'https://linusnnamdi.github.io/linus_okolo/html/games/home.html';
+
 bool isConfiguredSkillUrl(String url) {
-  return !url.contains('/skill_name/');
+  final u = url.trim();
+  if (u.isEmpty) return false;
+
+  // Still treat the old skill_name marker as not ready (future-proof)
+  if (u.contains('/skill_name/')) return false;
+
+  // Current shared placeholders → unavailable
+  if (u == kPlaceholderProjectUrl || u == kPlaceholderGameUrl) return false;
+
+  // Any other URL you set is considered ready
+  return true;
 }
 
+/// Navigates to a simple “Unavailable for the moment” page.
 void showSkillPageNotReady(
   BuildContext context, {
   required String skillName,
   required String pageType,
 }) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        '$skillName $pageType is not available yet.',
-      ),
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) =>
+          UnavailableSkillPage(skillName: skillName, pageType: pageType),
     ),
   );
 }
@@ -232,27 +250,18 @@ Future<void> openExternalUrl(
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            errorMessage ?? 'This link is not configured yet.',
-          ),
+          content: Text(errorMessage ?? 'This link is not configured yet.'),
         ),
       );
     }
     return;
   }
 
-  final opened = await launchUrl(
-    uri,
-    mode: LaunchMode.externalApplication,
-  );
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
   if (!opened && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          errorMessage ?? 'Unable to open this link.',
-        ),
-      ),
+      SnackBar(content: Text(errorMessage ?? 'Unable to open this link.')),
     );
   }
 }
@@ -265,9 +274,7 @@ Future<void> openConfiguredSocialUrl(
   if (url.trim().isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '$platformName link has not been configured yet.',
-        ),
+        content: Text('$platformName link has not been configured yet.'),
       ),
     );
     return;
@@ -300,5 +307,70 @@ Future<void> openCourseUrl(
   if (!ok && context.mounted) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text('Could not open $url')));
+  }
+}
+
+class UnavailableSkillPage extends StatelessWidget {
+  final String skillName;
+  final String pageType;
+
+  const UnavailableSkillPage({
+    super.key,
+    required this.skillName,
+    required this.pageType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          skillName,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.hourglass_empty_rounded,
+                size: 72,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Unavailable for the moment',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'The $pageType for $skillName is not ready yet.\n'
+                'Please check back later.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+              ),
+              const SizedBox(height: 32),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Go back'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFF0C75C),
+                  foregroundColor: const Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
