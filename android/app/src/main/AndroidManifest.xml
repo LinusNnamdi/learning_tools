@@ -42,14 +42,14 @@
 
         <!-- for ads Test App ID, to be replaced with real AdMob App ID -->
             <!-- android:value="ca-app-pub-3940256099942544~3347511713" For test ads -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
-
-            <!-- android:value="ca-app-pub-7018091756479171~8629675699" For real ads -->
         <!-- <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-7018091756479171~8629675699"/>  -->
+            android:value="ca-app-pub-3940256099942544~3347511713"/> -->
+
+            <!-- android:value="ca-app-pub-7018091756479171~8629675699" For real ads -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-7018091756479171~8629675699"/> 
 
     </application>
     <!-- Required to query activities that can process text, see:

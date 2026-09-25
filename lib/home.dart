@@ -8,6 +8,7 @@ import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:learn/common/banner_ads.dart';
 import 'package:learn/common/common.dart';
 import 'package:learn/common/reward_ads.dart';
@@ -3140,50 +3141,55 @@ void _editLine(BuildContext context, DiagramController controller, String id) {
               'Edit Connection',
               style: TextStyle(fontWeight: FontWeight.w900),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: textController,
-                  decoration: const InputDecoration(
-                    labelText: 'Connection name',
-                  ),
-                ),
-
-                const SizedBox(height: 18),
-
-                SegmentedButton<LineType>(
-                  segments: const [
-                    ButtonSegment(
-                      value: LineType.single,
-                      label: Text('Single'),
-                      icon: Icon(Icons.arrow_forward),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 350,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: textController,
+                      decoration: const InputDecoration(
+                        labelText: 'Connection name',
+                      ),
                     ),
-                    ButtonSegment(
-                      value: LineType.double,
-                      label: Text('Double'),
-                      icon: Icon(Icons.swap_horiz),
+
+                    const SizedBox(height: 18),
+
+                    SegmentedButton<LineType>(
+                      segments: const [
+                        ButtonSegment(
+                          value: LineType.single,
+                          label: Text('Single'),
+                          icon: Icon(Icons.arrow_forward),
+                        ),
+                        ButtonSegment(
+                          value: LineType.double,
+                          label: Text('Double'),
+                          icon: Icon(Icons.swap_horiz),
+                        ),
+                      ],
+                      selected: {selectedType},
+                      onSelectionChanged: (value) {
+                        setState(() {
+                          selectedType = value.first;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 24),
+
+                    _DiagramColorSelector(
+                      label: 'Line colour',
+                      selectedColor: selectedColor,
+                      onChanged: (color) {
+                        setState(() {
+                          selectedColor = color;
+                        });
+                      },
                     ),
                   ],
-                  selected: {selectedType},
-                  onSelectionChanged: (value) {
-                    setState(() {
-                      selectedType = value.first;
-                    });
-                  },
                 ),
-                const SizedBox(height: 24),
-
-                _DiagramColorSelector(
-                  label: 'Line colour',
-                  selectedColor: selectedColor,
-                  onChanged: (color) {
-                    setState(() {
-                      selectedColor = color;
-                    });
-                  },
-                ),
-              ],
+              ),
             ),
             actions: [
               TextButton(
@@ -4131,11 +4137,46 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
   bool _workspaceOpen = false;
+  DateTime? _lastBackPress;
 
   static const double _wideBreakpoint = 900;
 
   void _openWorkspace() {
     setState(() => _workspaceOpen = true);
+  }
+
+  Future<void> _onDeviceBack() async {
+    // 1) Workspace open → go back to Home screen (not exit)
+    if (_workspaceOpen) {
+      setState(() => _workspaceOpen = false);
+      return;
+    }
+
+    // 2) Not on Home tab → switch to Home
+    if (_currentIndex != 0) {
+      setState(() => _currentIndex = 0);
+      return;
+    }
+
+    // 3) Already on Home → double-back to exit
+    final now = DateTime.now();
+    if (_lastBackPress == null ||
+        now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
+      _lastBackPress = now;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Press back again to exit'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Second back within 2 seconds → leave the app
+    // SystemNavigator is from services.dart (usually already imported via material.dart)
+    SystemNavigator.pop();
   }
 
   @override
@@ -4153,86 +4194,95 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= _wideBreakpoint;
 
-        if (isWide) {
-          // ─── LARGE SCREEN: left NavigationRail ───
-          return Scaffold(
-            body: Row(
-              children: [
-                NavigationRail(
-                  selectedIndex: _currentIndex,
-                  onDestinationSelected: (index) {
-                    setState(() => _currentIndex = index);
-                  },
-                  labelType: NavigationRailLabelType.all,
-                  backgroundColor: Theme.of(context).colorScheme.surface,
-                  indicatorColor: const Color(0xFFF0C75C)
-                      .withValues(alpha: 0.3),
-                  selectedIconTheme: const IconThemeData(
-                    color: Color(0xFF111827),
+        // ── Wrap BOTH layouts with PopScope ──
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (bool didPop, dynamic result) async {
+            if (didPop) return;
+            await _onDeviceBack();
+          },
+          child: isWide
+              // ── LARGE SCREEN (unchanged) ──
+              ? Scaffold(
+                  body: Row(
+                    children: [
+                      NavigationRail(
+                        selectedIndex: _currentIndex,
+                        onDestinationSelected: (index) {
+                          setState(() => _currentIndex = index);
+                        },
+                        labelType: NavigationRailLabelType.all,
+                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        indicatorColor: const Color(0xFFF0C75C)
+                            .withValues(alpha: 0.3),
+                        selectedIconTheme: const IconThemeData(
+                          color: Color(0xFF111827),
+                        ),
+                        destinations: const [
+                          NavigationRailDestination(
+                            icon: Icon(Icons.home_outlined),
+                            selectedIcon: Icon(Icons.home_rounded),
+                            label: Text('Home'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.school_outlined),
+                            selectedIcon: Icon(Icons.school),
+                            label: Text('Courses'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.sports_esports_outlined),
+                            selectedIcon: Icon(Icons.sports_esports),
+                            label: Text('Games'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.work_outline_rounded),
+                            selectedIcon: Icon(Icons.work_rounded),
+                            label: Text('Jobs'),
+                          ),
+                        ],
+                      ),
+                      const VerticalDivider(thickness: 1, width: 1),
+                      Expanded(
+                        child: IndexedStack(
+                          index: _currentIndex,
+                          children: pages,
+                        ),
+                      ),
+                    ],
                   ),
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home_rounded),
-                      label: Text('Home'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.school_outlined),
-                      selectedIcon: Icon(Icons.school),
-                      label: Text('Courses'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.sports_esports_outlined),
-                      selectedIcon: Icon(Icons.sports_esports),
-                      label: Text('Games'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.work_outline_rounded),
-                      selectedIcon: Icon(Icons.work_rounded),
-                      label: Text('Jobs'),
-                    ),
-                  ],
+                )
+              // ── SMALL SCREEN (unchanged) ──
+              : Scaffold(
+                  body: IndexedStack(index: _currentIndex, children: pages),
+                  bottomNavigationBar: NavigationBar(
+                    selectedIndex: _currentIndex,
+                    onDestinationSelected: (index) {
+                      setState(() => _currentIndex = index);
+                    },
+                    destinations: const [
+                      NavigationDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home_rounded),
+                        label: 'Home',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.school_outlined),
+                        selectedIcon: Icon(Icons.school),
+                        label: 'Courses',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.sports_esports_outlined),
+                        selectedIcon: Icon(Icons.sports_esports),
+                        label: 'Games',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.work_outline_rounded),
+                        selectedIcon: Icon(Icons.work_rounded),
+                        label: 'Jobs',
+                      ),
+                    ],
+                  ),
                 ),
-                const VerticalDivider(thickness: 1, width: 1),
-                Expanded(
-                  child: IndexedStack(index: _currentIndex, children: pages),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // ─── SMALL SCREEN: classic bottom NavigationBar ───
-        return Scaffold(
-          body: IndexedStack(index: _currentIndex, children: pages),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _currentIndex,
-            onDestinationSelected: (index) {
-              setState(() => _currentIndex = index);
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home_rounded),
-                label: 'Home',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.school_outlined),
-                selectedIcon: Icon(Icons.school),
-                label: 'Courses',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.sports_esports_outlined),
-                selectedIcon: Icon(Icons.sports_esports),
-                label: 'Games',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.work_outline_rounded),
-                selectedIcon: Icon(Icons.work_rounded),
-                label: 'Jobs',
-              ),
-            ],
-          ),
         );
       },
     );
@@ -4557,113 +4607,121 @@ class _VideoCropAndExportScreenState extends State<VideoCropAndExportScreen> {
             ),
         ],
       ),
-      body: Stack(
-        children: [
-          // ── The actual content that will be recorded ──────────────────
-          // Fitted into the available space so the user can see it,
-          // but the RepaintBoundary always captures the native 1800×1200.
-          Center(
-            child: FittedBox(
-              fit: BoxFit.contain,
-              child: SizedBox(
-                width: 1800,
-                height: 1200,
-                child: RepaintBoundary(
-                  key: _boundaryKey,
-                  child: _ExportableDiagram(controller: widget.controller),
+      body: ResponsiveAdShell(
+        showTopOnSmall: true,
+        showBottomOnSmall: true,
+        child: Stack(
+          children: [
+            // ── The actual content that will be recorded ──────────────────
+            // Fitted into the available space so the user can see it,
+            // but the RepaintBoundary always captures the native 1800×1200.
+            Center(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: 1800,
+                  height: 1200,
+                  child: RepaintBoundary(
+                    key: _boundaryKey,
+                    child: _ExportableDiagram(controller: widget.controller),
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // ── Crop overlay (only while not exporting) ───────────────────
-          if (!_exporting)
-            Positioned.fill(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Scale factors from the FittedBox
-                  final scaleX = constraints.maxWidth / 1800;
-                  final scaleY = constraints.maxHeight / 1200;
-                  final scale = math.min(scaleX, scaleY);
-                  final offsetX = (constraints.maxWidth - 1800 * scale) / 2;
-                  final offsetY = (constraints.maxHeight - 1200 * scale) / 2;
+            // ── Crop overlay (only while not exporting) ───────────────────
+            if (!_exporting)
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Scale factors from the FittedBox
+                    final scaleX = constraints.maxWidth / 1800;
+                    final scaleY = constraints.maxHeight / 1200;
+                    final scale = math.min(scaleX, scaleY);
+                    final offsetX = (constraints.maxWidth - 1800 * scale) / 2;
+                    final offsetY = (constraints.maxHeight - 1200 * scale) / 2;
 
-                  final screenRect = Rect.fromLTWH(
-                    offsetX + _cropRect.left * scale,
-                    offsetY + _cropRect.top * scale,
-                    _cropRect.width * scale,
-                    _cropRect.height * scale,
-                  );
+                    final screenRect = Rect.fromLTWH(
+                      offsetX + _cropRect.left * scale,
+                      offsetY + _cropRect.top * scale,
+                      _cropRect.width * scale,
+                      _cropRect.height * scale,
+                    );
 
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onPanStart: (d) {
-                      _dragStart = d.localPosition;
-                      _rectAtDragStart = _cropRect;
-                      _activeHandle = _hitTestHandle(
-                        screenRect,
-                        d.localPosition,
-                      );
-                    },
-                    onPanUpdate: (d) {
-                      if (_dragStart == null || _rectAtDragStart == null)return;
-                        
-                      final dx = (d.localPosition.dx - _dragStart!.dx) / scale;
-                      final dy = (d.localPosition.dy - _dragStart!.dy) / scale;
-                      setState(() {
-                        _cropRect = _applyHandleDrag(
-                          _rectAtDragStart!,
-                          _activeHandle,
-                          dx,
-                          dy,
-                        ).intersect(const Rect.fromLTWH(0, 0, 1800, 1200));
-                      });
-                    },
-                    onPanEnd: (_) {
-                      _dragStart = null;
-                      _rectAtDragStart = null;
-                      _activeHandle = null;
-                    },
-                    child: CustomPaint(
-                      painter: _CropOverlayPainter(screenRect: screenRect),
-                      size: Size(constraints.maxWidth, constraints.maxHeight),
-                    ),
-                  );
-                },
-              ),
-            ),
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanStart: (d) {
+                        _dragStart = d.localPosition;
+                        _rectAtDragStart = _cropRect;
+                        _activeHandle = _hitTestHandle(
+                          screenRect,
+                          d.localPosition,
+                        );
+                      },
+                      onPanUpdate: (d) {
+                        if (_dragStart == null || _rectAtDragStart == null) {
+                          return;
+                        }
 
-          // ── Export progress ───────────────────────────────────────────
-          if (_exporting)
-            Container(
-              color: Colors.black54,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 64,
-                      height: 64,
-                      child: CircularProgressIndicator(
-                        value: _progress,
-                        color: const Color(0xFFF0C75C),
-                        strokeWidth: 5,
+                        final dx =
+                            (d.localPosition.dx - _dragStart!.dx) / scale;
+                        final dy =
+                            (d.localPosition.dy - _dragStart!.dy) / scale;
+                        setState(() {
+                          _cropRect = _applyHandleDrag(
+                            _rectAtDragStart!,
+                            _activeHandle,
+                            dx,
+                            dy,
+                          ).intersect(const Rect.fromLTWH(0, 0, 1800, 1200));
+                        });
+                      },
+                      onPanEnd: (_) {
+                        _dragStart = null;
+                        _rectAtDragStart = null;
+                        _activeHandle = null;
+                      },
+                      child: CustomPaint(
+                        painter: _CropOverlayPainter(screenRect: screenRect),
+                        size: Size(constraints.maxWidth, constraints.maxHeight),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Exporting… ${(_progress * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
-            ),
-        ],
+
+            // ── Export progress ───────────────────────────────────────────
+            if (_exporting)
+              Container(
+                color: Colors.black54,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 64,
+                        height: 64,
+                        child: CircularProgressIndicator(
+                          value: _progress,
+                          color: const Color(0xFFF0C75C),
+                          strokeWidth: 5,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Exporting… ${(_progress * 100).toStringAsFixed(0)}%',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -4672,10 +4730,14 @@ class _VideoCropAndExportScreenState extends State<VideoCropAndExportScreen> {
     const handleSize = 28.0;
     if ((p - screenRect.topLeft).distance < handleSize) return _CropHandle.tl;
     if ((p - screenRect.topRight).distance < handleSize) return _CropHandle.tr;
-    if ((p - screenRect.bottomLeft).distance < handleSize)return _CropHandle.bl;
-      
-    if ((p - screenRect.bottomRight).distance < handleSize)  return _CropHandle.br;
-    
+    if ((p - screenRect.bottomLeft).distance < handleSize) {
+      return _CropHandle.bl;
+    }
+
+    if ((p - screenRect.bottomRight).distance < handleSize) {
+      return _CropHandle.br;
+    }
+
     if (screenRect.contains(p)) return _CropHandle.move;
     return null;
   }
@@ -4736,39 +4798,40 @@ class _VideoCropAndExportScreenState extends State<VideoCropAndExportScreen> {
     final totalFrames = fps * durationSec;
 
     // Drive the existing animation system
-widget.controller.pause();
-widget.controller.resetAnimation();
+    widget.controller.pause();
+    widget.controller.resetAnimation();
 
-// Particles are only drawn when isPlaying == true
-widget.controller.play();          // ← add this line
+    // Particles are only drawn when isPlaying == true
+    widget.controller.play(); // ← add this line
 
-try {
-  for (var i = 0; i < totalFrames; i++) {
-    final t = i / (totalFrames - 1);
-    widget.controller.updateAnimation(t);
-    await Future.delayed(const Duration(milliseconds: 40));
-    await WidgetsBinding.instance.endOfFrame;
+    try {
+      for (var i = 0; i < totalFrames; i++) {
+        final t = i / (totalFrames - 1);
+        widget.controller.updateAnimation(t);
+        await Future.delayed(const Duration(milliseconds: 40));
+        await WidgetsBinding.instance.endOfFrame;
 
-    final boundary =
-        _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary == null || !boundary.hasSize) continue;
+        final boundary =
+            _boundaryKey.currentContext?.findRenderObject()
+                as RenderRepaintBoundary?;
+        if (boundary == null || !boundary.hasSize) continue;
 
-    final image = await boundary.toImage(pixelRatio: 1.5);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    image.dispose();
-    if (byteData == null) continue;
+        final image = await boundary.toImage(pixelRatio: 1.5);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        image.dispose();
+        if (byteData == null) continue;
 
-    final file = File(
-      '${framesDir.path}/frame_${i.toString().padLeft(5, '0')}.png',
-    );
-    await file.writeAsBytes(byteData.buffer.asUint8List());
+        final file = File(
+          '${framesDir.path}/frame_${i.toString().padLeft(5, '0')}.png',
+        );
+        await file.writeAsBytes(byteData.buffer.asUint8List());
 
-    if (mounted) setState(() => _progress = (i + 1) / totalFrames);
-  }
-} finally {
-  // Always restore the previous play state
-  widget.controller.pause();
-}
+        if (mounted) setState(() => _progress = (i + 1) / totalFrames);
+      }
+    } finally {
+      // Always restore the previous play state
+      widget.controller.pause();
+    }
 
     // Encode
     final outPath =

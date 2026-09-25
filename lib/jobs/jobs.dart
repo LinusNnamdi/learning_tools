@@ -57,11 +57,11 @@ Future<void> showContactMessageForm(
   final descriptionController = TextEditingController();
 
   String selectedService = 'Software';
-
   final formKey = GlobalKey<FormState>();
 
   try {
-    await showDialog<void>(
+    // Returns the built message when the user taps Continue, or null on Cancel.
+    final message = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
@@ -75,7 +75,6 @@ Future<void> showContactMessageForm(
                 'Contact via $channelName',
                 style: const TextStyle(fontWeight: FontWeight.w900),
               ),
-
               content: SizedBox(
                 width: 520,
                 child: SingleChildScrollView(
@@ -96,13 +95,10 @@ Future<void> showContactMessageForm(
                             if (value == null || value.trim().isEmpty) {
                               return 'Please enter your name or business name.';
                             }
-
                             return null;
                           },
                         ),
-
                         const SizedBox(height: 16),
-
                         DropdownButtonFormField<String>(
                           initialValue: selectedService,
                           decoration: const InputDecoration(
@@ -126,15 +122,12 @@ Future<void> showContactMessageForm(
                           ],
                           onChanged: (value) {
                             if (value == null) return;
-
                             setDialogState(() {
                               selectedService = value;
                             });
                           },
                         ),
-
                         const SizedBox(height: 16),
-
                         TextFormField(
                           controller: descriptionController,
                           minLines: 4,
@@ -153,11 +146,9 @@ Future<void> showContactMessageForm(
                             if (value == null || value.trim().isEmpty) {
                               return 'Please provide a short description.';
                             }
-
                             if (value.trim().length < 10) {
                               return 'Please provide a little more detail.';
                             }
-
                             return null;
                           },
                         ),
@@ -166,40 +157,26 @@ Future<void> showContactMessageForm(
                   ),
                 ),
               ),
-
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                  },
+                  onPressed: () =>
+                      Navigator.pop(dialogContext), // cancel → null
                   child: const Text('Cancel'),
                 ),
-
                 FilledButton.icon(
-                  onPressed: () async {
+                  onPressed: () {
                     final valid = formKey.currentState?.validate() ?? false;
-
                     if (!valid) return;
 
-                    final message = buildEarnDeeContactMessage(
+                    // Build message WHILE controllers are still alive
+                    final msg = buildEarnDeeContactMessage(
                       name: nameController.text,
                       service: selectedService,
                       description: descriptionController.text,
                     );
 
-                    Navigator.pop(dialogContext);
-
-                    if (!context.mounted) return;
-
-                    switch (channel) {
-                      case ContactChannel.whatsapp:
-                        await sendEarnDeeWhatsAppMessage(context, message);
-                        break;
-
-                      case ContactChannel.email:
-                        await sendEarnDeeEmail(context, message);
-                        break;
-                    }
+                    // Close dialog and return the message
+                    Navigator.pop(dialogContext, msg);
                   },
                   icon: Icon(
                     channel == ContactChannel.whatsapp
@@ -218,6 +195,19 @@ Future<void> showContactMessageForm(
         );
       },
     );
+
+    // Dialog is fully closed. Controllers can be disposed safely in finally.
+    // Use the OUTER context (the one that opened the dialog).
+    if (message == null || !context.mounted) return;
+
+    switch (channel) {
+      case ContactChannel.whatsapp:
+        await sendEarnDeeWhatsAppMessage(context, message);
+        break;
+      case ContactChannel.email:
+        await sendEarnDeeEmail(context, message);
+        break;
+    }
   } finally {
     nameController.dispose();
     descriptionController.dispose();
@@ -865,6 +855,89 @@ class _ContactTile extends StatelessWidget {
   }
 }
 
+/// Daily job-search limit + ad unlocks.
+/// 5 free searches/day. Up to 2 extra unlocks via rewarded ads
+/// (1st unlock = 1 ad, 2nd unlock = 2 ads).
+class JobSearchLimitService {
+  JobSearchLimitService._();
+  static final JobSearchLimitService instance = JobSearchLimitService._();
+
+  static const _dateKey = 'job_search_limit_date';
+  static const _countKey = 'job_search_count';
+  static const _unlocksKey = 'job_search_ad_unlocks'; // 0, 1 or 2
+
+  static const int freePerDay = 5;
+  static const int maxAdUnlocks = 2;
+
+  String _today() {
+    final n = DateTime.now();
+    return '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _ensureToday(SharedPreferences prefs) async {
+    final stored = prefs.getString(_dateKey);
+    final today = _today();
+    if (stored != today) {
+      await prefs.setString(_dateKey, today);
+      await prefs.setInt(_countKey, 0);
+      await prefs.setInt(_unlocksKey, 0);
+    }
+  }
+
+  /// Total allowed searches today = free + unlocks already earned.
+  Future<int> allowedToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    await _ensureToday(prefs);
+    final unlocks = prefs.getInt(_unlocksKey) ?? 0;
+    return freePerDay + unlocks;
+  }
+
+  Future<int> usedToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    await _ensureToday(prefs);
+    return prefs.getInt(_countKey) ?? 0;
+  }
+
+  Future<int> remainingToday() async {
+    final used = await usedToday();
+    final allowed = await allowedToday();
+    return (allowed - used).clamp(0, 999);
+  }
+
+  Future<bool> canSearch() async => (await remainingToday()) > 0;
+
+  /// How many ad unlocks already used today (0–2).
+  Future<int> unlocksUsedToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    await _ensureToday(prefs);
+    return prefs.getInt(_unlocksKey) ?? 0;
+  }
+
+  /// Ads required for the *next* unlock (1 then 2). Null if no more unlocks.
+  Future<int?> adsNeededForNextUnlock() async {
+    final used = await unlocksUsedToday();
+    if (used >= maxAdUnlocks) return null;
+    return used + 1; // 1st unlock → 1 ad, 2nd → 2 ads
+  }
+
+  Future<void> recordSearch() async {
+    final prefs = await SharedPreferences.getInstance();
+    await _ensureToday(prefs);
+    final count = prefs.getInt(_countKey) ?? 0;
+    await prefs.setInt(_countKey, count + 1);
+  }
+
+  /// Call after the required number of rewarded ads succeeded.
+  Future<void> grantUnlock() async {
+    final prefs = await SharedPreferences.getInstance();
+    await _ensureToday(prefs);
+    final unlocks = prefs.getInt(_unlocksKey) ?? 0;
+    if (unlocks < maxAdUnlocks) {
+      await prefs.setInt(_unlocksKey, unlocks + 1);
+    }
+  }
+}
+
 class FindJobsTab extends StatefulWidget {
   const FindJobsTab({super.key});
 
@@ -882,7 +955,7 @@ class _FindJobsTabState extends State<FindJobsTab> {
   final _currentLocationController = TextEditingController();
   final _targetLocationController = TextEditingController();
   final String kAndroidApkDownloadUrl =
-      'https://github.com/LinusNnamdi/learning_tools/actions/runs/35790723139/artifacts/10721544503';
+      'https://github.com/LinusNnamdi/learning_tools/releases/latest/download/app-release.apk';
 
   String _experienceLevel = 'Entry Level';
   bool _includeRemoteJobs = true;
@@ -942,6 +1015,7 @@ class _FindJobsTabState extends State<FindJobsTab> {
                 ),
               ],
             ),
+
             // ========== FIXED (non-scrollable) BANNER AREA ==========
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
@@ -965,7 +1039,6 @@ class _FindJobsTabState extends State<FindJobsTab> {
                         ),
                         child: Text(
                           'More Information | better result.\n'
-                          'Although, we ensure secure outputs. '
                           'EarnDee Limited is not liable for damages, '
                           'do your research.',
                           style: theme.textTheme.bodyMedium?.copyWith(
@@ -987,67 +1060,6 @@ class _FindJobsTabState extends State<FindJobsTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Header card
-                        // Container(
-                        //   padding: const EdgeInsets.all(24),
-                        //   decoration: BoxDecoration(
-                        //     gradient: LinearGradient(
-                        //       colors: [
-                        //         const Color(0xFFF0C75C).withValues(alpha: 0.20),
-                        //         theme.colorScheme.surface,
-                        //       ],
-                        //     ),
-                        //     borderRadius: BorderRadius.circular(24),
-                        //     border: Border.all(
-                        //       color: const Color(0xFFF0C75C)
-                        //           .withValues(alpha: 0.35),
-                        //     ),
-                        //   ),
-                        //   child: Row(
-                        //     crossAxisAlignment: CrossAxisAlignment.start,
-                        //     children: [
-                        //       Container(
-                        //         width: 64,
-                        //         height: 64,
-                        //         decoration: BoxDecoration(
-                        //           color: const Color(0xFFF0C75C),
-                        //           borderRadius: BorderRadius.circular(18),
-                        //         ),
-                        //         child: const Icon(
-                        //           Icons.search_rounded,
-                        //           size: 32,
-                        //           color: Color(0xFF111827),
-                        //         ),
-                        //       ),
-                        //       const SizedBox(width: 18),
-                        //       Expanded(
-                        //         child: Column(
-                        //           crossAxisAlignment: CrossAxisAlignment.start,
-                        //           children: [
-                        //             Text(
-                        //               'Job Finder',
-                        //               style: theme.textTheme.titleLarge
-                        //                   ?.copyWith(
-                        //                 fontWeight: FontWeight.w900,
-                        //               ),
-                        //             ),
-                        //             const SizedBox(height: 6),
-                        //             Text(
-                        //               'Tell us your skills, current location and where '
-                        //               'you want to work. The job engine will use this '
-                        //               'information to find and rank suitable opportunities.',
-                        //               style: theme.textTheme.bodyMedium
-                        //                   ?.copyWith(height: 1.5),
-                        //             ),
-                        //           ],
-                        //         ),
-                        //       ),
-                        //     ],
-                        //   ),
-                        // ),
-
-                        // const SizedBox(height: 24),
-
                         // Form
                         Form(
                           key: _formKey,
@@ -1129,9 +1141,6 @@ class _FindJobsTabState extends State<FindJobsTab> {
                               SwitchListTile.adaptive(
                                 contentPadding: EdgeInsets.zero,
                                 title: const Text('Include remote jobs'),
-                                subtitle: const Text(
-                                  'Also consider jobs that can be performed remotely.',
-                                ),
                                 value: _includeRemoteJobs,
                                 onChanged: (value) {
                                   setState(() {
@@ -1148,11 +1157,11 @@ class _FindJobsTabState extends State<FindJobsTab> {
                               // WEB    → disabled button + Download app button
                               // ────────────────────────────────────────────────
                               if (kIsWeb) ...[
-                                // Disabled “Find Jobs With AI”
+                                // Disabled “Find Jobs”
                                 FilledButton.icon(
                                   onPressed: null, // always disabled on web
                                   icon: const Icon(Icons.auto_awesome_rounded),
-                                  label: const Text('Find Jobs With AI'),
+                                  label: const Text('Find Jobs'),
                                   style: FilledButton.styleFrom(
                                     backgroundColor: const Color(0xFFF0C75C)
                                         .withValues(alpha: 0.45),
@@ -1162,6 +1171,33 @@ class _FindJobsTabState extends State<FindJobsTab> {
                                       vertical: 16,
                                     ),
                                   ),
+                                ),
+                                FutureBuilder<int>(
+                                  future: JobSearchLimitService.instance
+                                      .remainingToday(),
+                                  builder: (context, snap) {
+                                    final left = snap.data;
+                                    if (left == null) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 8),
+                                      child: Text(
+                                        left > 0
+                                            ? '$left free search${left == 1 ? '' : 'es'} left today'
+                                            : 'Daily limit reached — watch ads to unlock more',
+                                        textAlign: TextAlign.center,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: theme
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.color
+                                                  ?.withValues(alpha: 0.7),
+                                            ),
+                                      ),
+                                    );
+                                  },
                                 ),
 
                                 const SizedBox(height: 14),
@@ -1205,7 +1241,7 @@ class _FindJobsTabState extends State<FindJobsTab> {
                                 const SizedBox(height: 12),
 
                                 Text(
-                                  'AI job search uses paid API calls and is only available in the Android app (with rewarded ads). '
+                                  'EarnDee Ai job search uses paid API calls and is only available in the Android app (with rewarded ads). '
                                   'Download the free APK to unlock it.',
                                   textAlign: TextAlign.center,
                                   style: theme.textTheme.bodySmall?.copyWith(
@@ -1231,7 +1267,7 @@ class _FindJobsTabState extends State<FindJobsTab> {
                                       : const Icon(Icons.auto_awesome_rounded),
                                   label: Text(
                                     _isSearching
-                                        ? 'Searching Jobs...'
+                                        ? 'Searching Best Jobs...'
                                         : 'Find Jobs',
                                   ),
                                   style: FilledButton.styleFrom(
@@ -1305,6 +1341,15 @@ class _FindJobsTabState extends State<FindJobsTab> {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid || _isSearching) return;
 
+    // ── Daily limit check ──────────────────────────────────────
+    final canSearch = await JobSearchLimitService.instance.canSearch();
+    if (!canSearch) {
+      if (!mounted) return;
+      await _showLimitReachedDialog();
+      return;
+    }
+    // ───────────────────────────────────────────────────────────
+
     final request = JobSearchRequest(
       skills: _skillsController.text.trim(),
       currentLocation: _currentLocationController.text.trim(),
@@ -1327,10 +1372,20 @@ class _FindJobsTabState extends State<FindJobsTab> {
       final analyzedResponse = JobResponseAnalyzer.analyze(rawResponse);
 
       if (!mounted) return;
+
+      // Count this successful search
+      await JobSearchLimitService.instance.recordSearch();
+
       setState(() {
         _searchResponse = analyzedResponse;
       });
+
+      // Encouragement after every search
+      if (mounted) {
+        _showApplyFirstMessage();
+      }
     } on FirebaseFunctionsException catch (error) {
+      // … existing error handling unchanged …
       if (!mounted) return;
       setState(() {
         _searchError = _firebaseErrorMessage(error);
@@ -1376,6 +1431,122 @@ class _FindJobsTabState extends State<FindJobsTab> {
         return error.message ?? 'The AI service encountered an internal error.';
       default:
         return error.message ?? 'Unable to complete the job search.';
+    }
+  }
+
+  void _showApplyFirstMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 8),
+        content: Text(
+          'Great! Visit the job sites, learn more about each role, and apply. '
+          'Come back in a few hours (or after you have applied) to search again. '
+          'You have a limited number of free searches per day.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showLimitReachedDialog() async {
+    final adsNeeded = await JobSearchLimitService.instance
+        .adsNeededForNextUnlock();
+    final remainingUnlocks = adsNeeded == null
+        ? 0
+        : (JobSearchLimitService.maxAdUnlocks -
+              await JobSearchLimitService.instance.unlocksUsedToday());
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text(
+            'Daily search limit reached',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          content: Text(
+            adsNeeded == null
+                ? 'You have used all free searches and ad unlocks for today. '
+                      'Please apply to the jobs you already found, then try again tomorrow.'
+                : 'You have used your free searches for today.\n\n'
+                      'You can unlock 1 more search by watching '
+                      '${adsNeeded == 1 ? '1 short ad' : '$adsNeeded short ads'} '
+                      '($remainingUnlocks unlock${remainingUnlocks == 1 ? '' : 's'} left today).\n\n'
+                      'Or take time to visit the job sites you already found and apply.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+            if (adsNeeded != null)
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFF0C75C),
+                  foregroundColor: const Color(0xFF111827),
+                ),
+                icon: const Icon(Icons.ondemand_video_rounded),
+                label: Text(
+                  adsNeeded == 1
+                      ? 'Watch 1 ad to unlock'
+                      : 'Watch $adsNeeded ads to unlock',
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _tryAdUnlock(adsNeeded);
+                },
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _tryAdUnlock(int adsNeeded) async {
+    if (kIsWeb) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ad unlocks are only available in the Android app. '
+            'Download the app to unlock extra searches.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    var successCount = 0;
+    for (var i = 0; i < adsNeeded; i++) {
+      final ok = await AdsService.instance.showRewardedAdIfNeeded();
+      if (!ok) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                successCount == 0
+                    ? 'Ad was not completed. Search not unlocked.'
+                    : 'Only $successCount of $adsNeeded ads completed. Need all to unlock.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      successCount++;
+    }
+
+    await JobSearchLimitService.instance.grantUnlock();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Search unlocked! You can find jobs once more.'),
+        ),
+      );
+      // Optional: immediately start the search the user wanted
+      // await _prepareJobSearch();
     }
   }
 }
@@ -1782,10 +1953,14 @@ class _InfoChip extends StatelessWidget {
         children: [
           Icon(icon, size: 15, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                                  overflow: TextOverflow.ellipsis,
+
+              ),
             ),
           ),
         ],

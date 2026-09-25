@@ -213,7 +213,7 @@ class HelpFaqData {
   // ── JOB FINDER – ~12–15 ───────────────────────────────────
   static const List<HelpFaqItem> jobFinder = [
     HelpFaqItem(
-      question: 'How does “Find Jobs With AI” work?',
+      question: 'How does “Find Jobs” work?',
       answer: 'You enter your skills, current location, preferred location and experience level. The AI searches the live web and returns matching job openings.',
     ),
     HelpFaqItem(

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -8,22 +10,30 @@ import 'package:learn/firebase_options.dart';
 import 'package:learn/home.dart';
 import 'package:provider/provider.dart';
 
+bool get isDesktop {
+  return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+}
+
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  if (!isDesktop) {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
 
-  await FirebaseAppCheck.instance.activate(
-    providerAndroid: kReleaseMode
-        ? const AndroidPlayIntegrityProvider() // for production
-        : const AndroidDebugProvider(), // for debugging
-    providerWeb: ReCaptchaEnterpriseProvider(
-      "6LfvicQtAAAAACIFcpNop-nim5arhg223jlp6oEb",
-    ),
-  );
+    await FirebaseAppCheck.instance.activate(
+      providerAndroid: kReleaseMode
+          ? const AndroidPlayIntegrityProvider() // for production
+          : const AndroidDebugProvider(), // for debugging
+      providerWeb: ReCaptchaEnterpriseProvider(
+        "6LfvicQtAAAAACIFcpNop-nim5arhg223jlp6oEb",
+      ),
+    );
 
-  if (!kIsWeb) {
-    await AdsService.instance.initialize();
+    if (!kIsWeb) {
+      await AdsService.instance.initialize();
+    }
   }
 
   final themeController = ThemeController();
@@ -54,3 +64,6 @@ Future<void> main() async {
 // flutter test
 // flutter build web
 // flutter build apk --release
+// flutter build appbundle --release
+// clear
+//.

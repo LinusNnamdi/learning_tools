@@ -18,8 +18,8 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   // Replace with your real AdMob banner unit ID
   static const String _androidUnitId =
-      // 'ca-app-pub-7018091756479171/1374187926'; //Real
-      'ca-app-pub-3940256099942544/6300978111'; // test
+      'ca-app-pub-7018091756479171/1374187926'; //Real
+      // 'ca-app-pub-3940256099942544/6300978111'; // test
   static const String _iosUnitId =
       'ca-app-pub-3940256099942544/2934735716'; // test
 

@@ -33,7 +33,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.earndeeltd.animate"
     compileSdk = 37
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "29.0.13113456"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -44,10 +44,10 @@ android {
         applicationId = "com.earndeeltd.animate"
 
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
 
-        versionCode = 1
-        versionName = "1.0.1"
+        versionCode = 5
+        versionName = "1.9.9"
     }
 
     /*
@@ -89,6 +89,12 @@ android {
              */
             signingConfig =
                 signingConfigs.getByName("release")
+
+            // Diagnostic: completely disable R8 shrinking/obfuscation.
+            isMinifyEnabled = false
+
+            // Resource shrinking requires code shrinking, so disable this too.
+            isShrinkResources = false
         }
     }
 }

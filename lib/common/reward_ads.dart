@@ -14,8 +14,8 @@ class AdsService {
 
   // ── Test IDs (replace with your real AdMob unit IDs for production) ──
   static const String _androidRewardedUnitId =
-  //  'ca-app-pub-7018091756479171/8581813853'; // Real ID
-      'ca-app-pub-3940256099942544/5224354917'; // Google test rewarded
+   'ca-app-pub-7018091756479171/8581813853'; // Real ID
+      // 'ca-app-pub-3940256099942544/5224354917'; // Test ID
   static const String _iosRewardedUnitId =
       'ca-app-pub-3940256099942544/1712485313'; // Google test rewarded
 

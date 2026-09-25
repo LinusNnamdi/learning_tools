@@ -56,7 +56,7 @@ export const searchJobsWithGemini = onCall(
     // -------------------------------------------------
     // Model + retry settings
     // -------------------------------------------------
-    const model = "gemini-3.6-flash";
+    const model = "gemini-3.5-flash-lite";
     const maxAttempts = 3;
 
     const url =
