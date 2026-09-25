@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
 
   workflow_dispatch:
 
@@ -19,7 +19,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-
   # ============================================================
   # FLUTTER WEB
   # ============================================================
@@ -84,7 +83,6 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-
   # ============================================================
   # ANDROID APK
   # ============================================================
@@ -93,17 +91,12 @@ jobs:
     name: Build Android APK
     runs-on: ubuntu-latest
 
-    steps:
-      # --------------------------------------------------------
-      # Checkout repository
-      # --------------------------------------------------------
+    permissions:
+      contents: write
 
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      # --------------------------------------------------------
-      # Flutter setup
-      # --------------------------------------------------------
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -111,22 +104,24 @@ jobs:
           channel: stable
           cache: true
 
-      # --------------------------------------------------------
-      # Install dependencies
-      # --------------------------------------------------------
-
       - name: Install dependencies
         run: flutter pub get
 
-      # ========================================================
-      # ANDROID SIGNING
-      # ========================================================
+      # ---------------------------------------------------------
+      # Android SDK / NDK
+      # ---------------------------------------------------------
 
-      # Restore the keystore that is intentionally excluded
-      # from Git using .gitignore.
-      #
-      # Required GitHub Secret:
-      # ANDROID_KEYSTORE_BASE64
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Install required Android NDK
+        run: |
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;29.0.13113456"
+
+      # ---------------------------------------------------------
+      # Android signing
+      # ---------------------------------------------------------
 
       - name: Restore Android keystore
         env:
@@ -134,63 +129,42 @@ jobs:
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
 
-      # Create android/key.properties dynamically.
-      #
-      # Required GitHub Secrets:
-      # ANDROID_KEYSTORE_PASSWORD
-      # ANDROID_KEY_PASSWORD
-      # ANDROID_KEY_ALIAS
-
-      - name: Create Android key.properties
-        env:
-          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      - name: Create key.properties
         run: |
           cat > android/key.properties <<EOF
-          storePassword=$STORE_PASSWORD
-          keyPassword=$KEY_PASSWORD
-          keyAlias=$KEY_ALIAS
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           storeFile=upload-keystore.jks
           EOF
 
-      # --------------------------------------------------------
-      # Build signed release APK
-      # --------------------------------------------------------
+      # ---------------------------------------------------------
+      # Build
+      # ---------------------------------------------------------
 
       - name: Build Android APK
         run: flutter build apk --release
 
-      # --------------------------------------------------------
-      # Upload APK as GitHub Actions artifact
-      # --------------------------------------------------------
+      # ---------------------------------------------------------
+      # Upload CI artifact
+      # ---------------------------------------------------------
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
 
-      # ========================================================
-      # GITHUB RELEASE
-      # ========================================================
+      # ---------------------------------------------------------
+      # GitHub Release
+      # ---------------------------------------------------------
 
-      # Only create a public GitHub Release when this workflow
-      # was triggered using a version tag such as:
-      #
-      # v1.0.0
-      # v1.0.1
-      # v1.1.0
-      #
-      # Normal pushes to main will NOT create a release.
-
-      - name: Publish APK to GitHub Release
+      - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" \
-            "build/app/outputs/flutter-apk/app-release.apk#app-release.apk" \
+            build/app/outputs/flutter-apk/app-release.apk \
             --title "${{ github.ref_name }}" \
             --generate-notes
