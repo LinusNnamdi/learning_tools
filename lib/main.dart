@@ -11,26 +11,33 @@ import 'package:learn/home.dart';
 import 'package:provider/provider.dart';
 
 bool get isDesktop {
-  return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  if (kIsWeb) return false;
+
+  return Platform.isWindows ||
+      Platform.isMacOS ||
+      Platform.isLinux;
 }
 
 Future<void> main() async {
-  if (!isDesktop) {
-    WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
 
+  // Firebase: Web + Android/iOS
+  if (!isDesktop) {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
     await FirebaseAppCheck.instance.activate(
       providerAndroid: kReleaseMode
-          ? const AndroidPlayIntegrityProvider() // for production
-          : const AndroidDebugProvider(), // for debugging
+          ? const AndroidPlayIntegrityProvider()
+          : const AndroidDebugProvider(),
+
       providerWeb: ReCaptchaEnterpriseProvider(
         "6LfvicQtAAAAACIFcpNop-nim5arhg223jlp6oEb",
       ),
     );
 
+    // Ads should NOT initialize on Web.
     if (!kIsWeb) {
       await AdsService.instance.initialize();
     }
