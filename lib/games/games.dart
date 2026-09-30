@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:learn/common/banner_ads.dart';
 import 'package:learn/courses/course.dart';
-import 'package:learn/courses/courseQuiz.dart';
+import 'package:learn/courses/course_quiz.dart';
 import 'package:learn/helps/help.dart';
 import 'package:provider/provider.dart';
 
