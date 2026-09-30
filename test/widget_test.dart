@@ -489,11 +489,6 @@ void main() {
           reason: '${course.name} must have a project URL',
         );
 
-        expect(
-          course.gameUrl,
-          isNotEmpty,
-          reason: '${course.name} must have a game URL',
-        );
       }
     });
 
@@ -509,17 +504,6 @@ void main() {
       }
     });
 
-    test('game urls use games/home.html', () {
-      final controller = CourseController();
-
-      for (final course in controller.courses) {
-        expect(
-          course.gameUrl.endsWith('/games/home.html'),
-          isTrue,
-          reason: '${course.name} has an invalid game URL',
-        );
-      }
-    });
 
     test('findById returns matching course', () {
       final c = CourseController();

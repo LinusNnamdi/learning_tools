@@ -4,6 +4,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:learn/common/common.dart';
 import 'package:learn/common/reward_ads.dart';
 import 'package:learn/courses/course.dart';
 import 'package:learn/firebase_options.dart';
@@ -73,4 +74,9 @@ Future<void> main() async {
 // flutter build apk --release
 // flutter build appbundle --release
 // clear
-//.
+// git add .                          
+// git commit -m "Release v1.9.15" 
+// git push 
+// git tag v1.9.15
+// git push origin v1.9.15
+// .

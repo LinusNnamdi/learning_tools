@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:learn/common/banner_ads.dart';
-import 'package:learn/common/common.dart';
 import 'package:learn/courses/course.dart';
+import 'package:learn/courses/courseQuiz.dart';
 import 'package:learn/helps/help.dart';
 import 'package:provider/provider.dart';
 
@@ -165,19 +165,18 @@ class _GamesScreenState extends State<GamesScreen> {
                         return GameCard(
                           course: course,
                           onPlay: () {
-                            if (!isConfiguredSkillUrl(course.gameUrl)) {
-                              showSkillPageNotReady(
-                                context,
-                                skillName: course.name,
-                                pageType: 'game',
-                              );
-                              return;
-                            }
-
-                            openCourseUrl(
+                            openCourseQuiz(
                               context,
-                              title: '${course.name} Game',
-                              url: course.gameUrl,
+                              courseId: course.id,
+                              courseName: course.name,
+                              courseColor: course.color,
+                              questions: course.quizQuestions,
+                              adBanner: const PlatformBannerAd(),
+                              onHelp: () => openEarnDeeAiHelp(
+                                context,
+                                pageTitle: '${course.name} Quiz',
+                                faqs: HelpFaqData.courses,
+                              ),
                             );
                           },
                         );

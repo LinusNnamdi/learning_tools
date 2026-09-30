@@ -685,56 +685,6 @@ class DiagramGroup {
        childLineIds = List<String>.from(childLineIds);
 }
 
-class ThemeController extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.system;
-
-  /// Every time the application starts, it begins in
-  /// the device/browser system theme.
-  ThemeMode get themeMode => _themeMode;
-
-  bool get isDarkMode => _themeMode == ThemeMode.dark;
-
-  bool get isLightMode => _themeMode == ThemeMode.light;
-
-  bool get isSystemMode => _themeMode == ThemeMode.system;
-
-  ThemeController();
-
-  Future<void> loadTheme() async {
-    // Intentionally do not load a saved preference.
-    //
-    // Learning Tech always starts in the device/browser's
-    // system theme.
-    _themeMode = ThemeMode.system;
-    notifyListeners();
-  }
-
-  void setLightMode() {
-    _themeMode = ThemeMode.light;
-    notifyListeners();
-  }
-
-  void setDarkMode() {
-    _themeMode = ThemeMode.dark;
-    notifyListeners();
-  }
-
-  void toggleLightDark() {
-    if (_themeMode == ThemeMode.dark) {
-      _themeMode = ThemeMode.light;
-    } else {
-      _themeMode = ThemeMode.dark;
-    }
-
-    notifyListeners();
-  }
-
-  void useSystemMode() {
-    _themeMode = ThemeMode.system;
-    notifyListeners();
-  }
-}
-
 enum CanvasTool { select, component, container, connect }
 
 class DiagramController extends ChangeNotifier {
@@ -2374,7 +2324,7 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, this.onStartWork});
 
   static const String _guideVideoUrl =
-      'https://www.youtube.com/watch?v=YOUR_VIDEO_ID';
+      'https://youtube.com/@linusnnamdi3023?si=OBpxhyYyLCaaKW27';
 
   @override
   Widget build(BuildContext context) {
@@ -3306,7 +3256,6 @@ void _editGroup(BuildContext context, DiagramController controller, String id) {
   );
 }
 
-//selectedColor.a
 enum _CanvasComponentKind { shape, line, group }
 
 void _showComponentContextMenu({
@@ -4556,14 +4505,7 @@ class _SavedFilesSheetState extends State<_SavedFilesSheet> {
   }
 }
 
-// ── Crop helpers ────────────────────────────────────────────────────
 enum _CropHandle { move, tl, tr, bl, br }
-
-// ── Import whatever file contains DiagramController, DiagramShape,
-//    DiagramGroup, DiagramLine, ShapeType, LineType, _ShapePainter,
-//    _CanvasBackgroundPainter, _LinePainter, ShapeWidget, _GroupWidget
-//    (or move the pure painting widgets into a shared file).
-//    Adjust the import path to match your project.
 
 class VideoCropAndExportScreen extends StatefulWidget {
   final DiagramController controller;
@@ -4892,10 +4834,6 @@ class _VideoCropAndExportScreenState extends State<VideoCropAndExportScreen> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Exportable diagram – pure visual copy of the canvas (no InteractiveViewer,
-// no gestures). Uses the same painters / widgets you already have.
-// ─────────────────────────────────────────────────────────────────────
 class _ExportableDiagram extends StatelessWidget {
   final DiagramController controller;
 
@@ -4974,9 +4912,6 @@ class _ExportableDiagram extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Simple crop overlay painter
-// ─────────────────────────────────────────────────────────────────────
 class _CropOverlayPainter extends CustomPainter {
   final Rect screenRect;
 

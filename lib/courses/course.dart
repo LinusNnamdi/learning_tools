@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:learn/common/banner_ads.dart';
 import 'package:learn/common/common.dart';
+import 'package:learn/courses/quiz/aws.dart';
+import 'package:learn/courses/quiz/azure.dart';
+import 'package:learn/courses/quiz/css.dart';
+import 'package:learn/courses/quiz/dart.dart';
+import 'package:learn/courses/quiz/flutter.dart';
+import 'package:learn/courses/quiz/gcp.dart';
+import 'package:learn/courses/quiz/html.dart';
+import 'package:learn/courses/quiz/javascript.dart';
 import 'package:learn/helps/help.dart';
 import 'package:provider/provider.dart';
+
+//openCourseUrl
 
 class Course {
   final String id;
@@ -10,22 +20,9 @@ class Course {
   final String description;
   final IconData icon;
   final Color color;
-
-  /// Official/recommended learning resource for this technology.
   final String learnUrl;
-
-  /// Your practical project samples for this technology.
-  ///
-  /// Replace only `skill_name` with the actual folder name when
-  /// that skill's project page is ready.
   final String projectUrl;
-
-  /// Your game/challenge page for this technology.
-  ///
-  /// Replace only `skill_name` with the actual folder name when
-  /// that skill's game page is ready.
-  final String gameUrl;
-
+  final List<Map<String, dynamic>>? quizQuestions;
   final String category;
 
   const Course({
@@ -36,7 +33,7 @@ class Course {
     required this.color,
     required this.learnUrl,
     required this.projectUrl,
-    required this.gameUrl,
+    required this.quizQuestions,
     required this.category,
   });
 }
@@ -366,6 +363,7 @@ class _EmptyCourses extends StatelessWidget {
 
 class CourseController extends ChangeNotifier {
   final List<Course> _courses = const [
+    //HTML
     Course(
       id: 'html',
       name: 'HTML5',
@@ -376,10 +374,10 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: htmlQuestions,
       category: 'Web Development',
     ),
-
+//CSS
     Course(
       id: 'css',
       name: 'CSS3',
@@ -390,10 +388,10 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: cssQuestions,
       category: 'Web Development',
     ),
-
+//Js
     Course(
       id: 'javascript',
       name: 'JavaScript',
@@ -404,10 +402,10 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: jsQuestions,
       category: 'Web Development',
     ),
-
+    //flutter
     Course(
       id: 'flutter',
       name: 'Flutter',
@@ -418,10 +416,10 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: flutterQuestions,
       category: 'App Development',
     ),
-
+    //Dart
     Course(
       id: 'dart',
       name: 'Dart',
@@ -432,10 +430,10 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: dartQuestions,
       category: 'App Development',
     ),
-
+    //AWS
     Course(
       id: 'aws',
       name: 'AWS',
@@ -446,10 +444,10 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: awsQuestion,
       category: 'Cloud',
     ),
-
+    //Azure
     Course(
       id: 'azure',
       name: 'Microsoft Azure',
@@ -460,10 +458,10 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: azureQuestions,
       category: 'Cloud',
     ),
-
+    //GCP
     Course(
       id: 'gcp',
       name: 'Google Cloud',
@@ -474,10 +472,10 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: gcpQuestions,
       category: 'Cloud',
     ),
-
+//Docker
     Course(
       id: 'docker',
       name: 'Docker',
@@ -488,13 +486,13 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'DevOps',
     ),
-
+//GitOps
     Course(
       id: 'github-actions',
-      name: 'GitHub Actions',
+      name: 'GitOps & GitHub Actions',
       description: 'Create CI/CD workflows for testing, building and deploying applications.',
       icon: Icons.account_tree,
       color: Color(0xFF24292F),
@@ -502,10 +500,10 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'DevOps',
     ),
-
+//Kubernetes
     Course(
       id: 'kubernetes',
       name: 'Kubernetes',
@@ -516,7 +514,7 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'DevOps',
     ),
 
@@ -530,7 +528,7 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'Infrastructure',
     ),
 
@@ -545,7 +543,7 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'Serverless',
     ),
 
@@ -559,7 +557,7 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'Security',
     ),
 
@@ -573,7 +571,7 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'DevOps',
     ),
 
@@ -587,7 +585,7 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'Backend',
     ),
 
@@ -601,7 +599,7 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'Development',
     ),
 
@@ -615,7 +613,7 @@ class CourseController extends ChangeNotifier {
       projectUrl:
           'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html',
 
-      gameUrl: 'https://linusnnamdi.github.io/linus_okolo/html/games/home.html',
+      quizQuestions: [],
       category: 'Artificial Intelligence',
     ),
   ];

@@ -203,9 +203,6 @@ bool get supportsEmbeddedWebView {
       defaultTargetPlatform == TargetPlatform.iOS;
 }
 
-// The shared placeholder URLs currently used by almost every course.
-// When you change a course’s projectUrl / gameUrl to something else,
-// that course becomes “configured” and opens normally.
 const String kPlaceholderProjectUrl =
     'https://linusnnamdi.github.io/linus_okolo/html/projects/home.html';
 const String kPlaceholderGameUrl =
@@ -374,3 +371,54 @@ class UnavailableSkillPage extends StatelessWidget {
     );
   }
 }
+
+class ThemeController extends ChangeNotifier {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  /// Every time the application starts, it begins in
+  /// the device/browser system theme.
+  ThemeMode get themeMode => _themeMode;
+
+  bool get isDarkMode => _themeMode == ThemeMode.dark;
+
+  bool get isLightMode => _themeMode == ThemeMode.light;
+
+  bool get isSystemMode => _themeMode == ThemeMode.system;
+
+  ThemeController();
+
+  Future<void> loadTheme() async {
+    // Intentionally do not load a saved preference.
+    //
+    // Learning Tech always starts in the device/browser's
+    // system theme.
+    _themeMode = ThemeMode.system;
+    notifyListeners();
+  }
+
+  void setLightMode() {
+    _themeMode = ThemeMode.light;
+    notifyListeners();
+  }
+
+  void setDarkMode() {
+    _themeMode = ThemeMode.dark;
+    notifyListeners();
+  }
+
+  void toggleLightDark() {
+    if (_themeMode == ThemeMode.dark) {
+      _themeMode = ThemeMode.light;
+    } else {
+      _themeMode = ThemeMode.dark;
+    }
+
+    notifyListeners();
+  }
+
+  void useSystemMode() {
+    _themeMode = ThemeMode.system;
+    notifyListeners();
+  }
+}
+

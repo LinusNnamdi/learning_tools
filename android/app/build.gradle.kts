@@ -47,7 +47,7 @@ android {
         targetSdk = 36
 
         versionCode = 5
-        versionName = "1.9.9"
+        versionName = "1.9.15"
     }
 
     /*
