@@ -34,7 +34,7 @@ class LearningTechApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Learning Tech',
+      title: 'Techie',
 
       theme: AppTheme.light,
 

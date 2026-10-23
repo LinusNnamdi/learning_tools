@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -14,9 +13,7 @@ import 'package:provider/provider.dart';
 bool get isDesktop {
   if (kIsWeb) return false;
 
-  return Platform.isWindows ||
-      Platform.isMacOS ||
-      Platform.isLinux;
+  return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 }
 
 Future<void> main() async {
@@ -38,10 +35,7 @@ Future<void> main() async {
       ),
     );
 
-    // Ads should NOT initialize on Web.
-    if (!kIsWeb) {
-      await AdsService.instance.initialize();
-    }
+    await AdsService.instance.initialize();
   }
 
   final themeController = ThemeController();
@@ -74,9 +68,9 @@ Future<void> main() async {
 // flutter build apk --release
 // flutter build appbundle --release
 // clear
-// git add .                          
-// git commit -m "Release v1.9.15" 
-// git push 
+// git add .
+// git commit -m "Release v1.9.15"
+// git push
 // git tag v1.9.15
 // git push origin v1.9.15
 // .

@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:learn/common/common.dart';
 import 'package:learn/courses/course.dart';
-import 'package:learn/home.dart';
+import 'package:learn/home/home.dart';
 import 'package:learn/jobs/jobs.dart';
 
 import 'package:provider/provider.dart';
